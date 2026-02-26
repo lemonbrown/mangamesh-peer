@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\MangaMesh.Shared\MangaMesh.Shared.csproj" />
+    <ProjectReference Include="..\MangaMesh.Shared\MangaMesh.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

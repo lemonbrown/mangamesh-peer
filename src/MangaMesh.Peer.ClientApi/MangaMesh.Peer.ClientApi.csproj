@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\MangaMesh.Shared\MangaMesh.Shared.csproj" />
     <ProjectReference Include="..\MangaMesh.Peer.Core\MangaMesh.Peer.Core.csproj" />
   </ItemGroup>
 
