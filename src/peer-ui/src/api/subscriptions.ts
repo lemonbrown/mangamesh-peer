@@ -1,15 +1,16 @@
 import type { SeriesSummaryResponse, SeriesSubscription } from '../types/api';
+import { apiFetch } from './client';
 
 const API_BASE_URL = '';
 
 export async function getSubscriptions(): Promise<SeriesSubscription[]> {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/list`);
+    const response = await apiFetch(`${API_BASE_URL}/api/subscriptions/list`);
     if (!response.ok) throw new Error('Failed to fetch subscriptions');
     return await response.json();
 }
 
 export async function addSubscription(seriesId: string, subscription: Partial<SeriesSubscription> = {}): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/subscribe`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/subscriptions/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -23,7 +24,7 @@ export async function addSubscription(seriesId: string, subscription: Partial<Se
 }
 
 export async function removeSubscription(seriesId: string): Promise<void> { // Removed payload, expecting object or just ID? Controller expects object
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/unsubscribe`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/subscriptions/unsubscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ seriesId })
@@ -45,7 +46,7 @@ export function unsubscribe(seriesId: string): Promise<void> {
 }
 
 export async function getSubscriptionUpdates(): Promise<SeriesSummaryResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/api/subscriptions/updates`);
+    const response = await apiFetch(`${API_BASE_URL}/api/subscriptions/updates`);
     if (!response.ok) throw new Error('Failed to fetch subscription updates');
     return await response.json();
 }

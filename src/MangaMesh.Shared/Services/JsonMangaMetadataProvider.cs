@@ -15,7 +15,7 @@
 
             if (!File.Exists(Path.Combine(path, filename)))
             {
-                File.Create(Path.Combine(path, filename));
+                File.WriteAllText(Path.Combine(path, filename), string.Empty);
             }
 
             var json = File.ReadAllText(Path.Combine(path, filename));

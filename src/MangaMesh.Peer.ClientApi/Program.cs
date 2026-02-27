@@ -1,3 +1,4 @@
+using MangaMesh.Peer.ClientApi.Authentication;
 using MangaMesh.Peer.ClientApi.Middleware;
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Blob;
@@ -48,6 +49,10 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+
+builder.Services.AddAuthentication(ApiKeyDefaults.AuthenticationScheme)
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyDefaults.AuthenticationScheme, null);
 
 // Configure form options for large file uploads
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
@@ -161,6 +166,7 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseDefaultFiles();

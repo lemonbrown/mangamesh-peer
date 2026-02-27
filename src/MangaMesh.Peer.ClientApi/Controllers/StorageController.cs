@@ -3,6 +3,7 @@ using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Peer.Core.Storage;
 using MangaMesh.Shared.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
@@ -10,6 +11,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [Route("api/node/storage")]
     [ApiController]
+    [Authorize]
     public class StorageController : ControllerBase
     {
         private readonly IStorageMonitorService _storageMonitorService;

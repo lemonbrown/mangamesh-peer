@@ -1,9 +1,10 @@
 import type { MangaMetadata } from '../types/api';
+import { apiFetch } from './client';
 
 export async function searchMetadata(query: string): Promise<MangaMetadata[]> {
     if (!query || query.length < 2) return [];
 
-    const response = await fetch(`/api/mangametadata/search?query=${encodeURIComponent(query)}`);
+    const response = await apiFetch(`/api/mangametadata/search?query=${encodeURIComponent(query)}`);
 
     if (!response.ok) {
         // Return empty list on failure to avoid breaking UI flow? Or throw?
@@ -15,7 +16,7 @@ export async function searchMetadata(query: string): Promise<MangaMetadata[]> {
 }
 
 export async function getMangaDetails(seriesId: string): Promise<import('../types/api').MangaDetails> {
-    const response = await fetch(`/api/mangametadata/${encodeURIComponent(seriesId)}`);
+    const response = await apiFetch(`/api/mangametadata/${encodeURIComponent(seriesId)}`);
 
     if (!response.ok) {
         throw new Error(`Failed to fetch manga details: ${response.statusText}`);

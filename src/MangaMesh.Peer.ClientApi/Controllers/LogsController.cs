@@ -1,9 +1,11 @@
 using MangaMesh.Peer.ClientApi.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/node/logs")]
     public class LogsController : ControllerBase
     {

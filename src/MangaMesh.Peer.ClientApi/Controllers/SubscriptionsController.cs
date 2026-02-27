@@ -2,6 +2,7 @@
 using MangaMesh.Peer.Core.Subscriptions;
 using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Shared.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
@@ -9,6 +10,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [Route("api/subscriptions")]
     [ApiController]
+    [Authorize]
     public class SubscriptionsController : ControllerBase
     {
         private readonly ISubscriptionStore _subscriptionStore;

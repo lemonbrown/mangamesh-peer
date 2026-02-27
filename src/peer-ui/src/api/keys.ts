@@ -1,11 +1,12 @@
 import type { KeyPair, KeyChallenge, VerifySignatureResponse } from '../types/api';
+import { apiFetch } from './client';
 
 const AUTH_API_BASE = '/api/keys';
 const CRYPTO_SERVICE_BASE = '/api/keys';
 
 export async function getKeys(): Promise<KeyPair> {
     try {
-        const response = await fetch('/api/keys');
+        const response = await apiFetch('/api/keys');
         if (!response.ok) throw new Error(response.statusText);
         return await response.json();
     } catch (e) {
@@ -16,7 +17,7 @@ export async function getKeys(): Promise<KeyPair> {
 
 export async function generateKeys(): Promise<KeyPair> {
     try {
-        const response = await fetch('/api/keys/generate', { method: 'POST' });
+        const response = await apiFetch('/api/keys/generate', { method: 'POST' });
         if (!response.ok) throw new Error(response.statusText);
         return await response.json();
     } catch (e) {
@@ -26,7 +27,7 @@ export async function generateKeys(): Promise<KeyPair> {
 }
 
 export async function requestChallenge(publicKeyBase64: string): Promise<KeyChallenge> {
-    const response = await fetch(`${AUTH_API_BASE}/challenges`, {
+    const response = await apiFetch(`${AUTH_API_BASE}/challenges`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publicKey: publicKeyBase64 })
@@ -36,7 +37,7 @@ export async function requestChallenge(publicKeyBase64: string): Promise<KeyChal
 }
 
 export async function solveChallenge(nonceBase64: string, privateKeyBase64: string): Promise<string> {
-    const response = await fetch(`${CRYPTO_SERVICE_BASE}/challenge/solve`, {
+    const response = await apiFetch(`${CRYPTO_SERVICE_BASE}/challenge/solve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nonceBase64, privateKeyBase64 })
@@ -46,7 +47,7 @@ export async function solveChallenge(nonceBase64: string, privateKeyBase64: stri
 }
 
 export async function verifySignature(publicKeyBase64: string, challengeId: string, signatureBase64: string): Promise<VerifySignatureResponse> {
-    const response = await fetch(`${AUTH_API_BASE}/challenges/verify`, {
+    const response = await apiFetch(`${AUTH_API_BASE}/challenges/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ challengeId, signatureBase64, publicKey: publicKeyBase64 })
@@ -57,7 +58,7 @@ export async function verifySignature(publicKeyBase64: string, challengeId: stri
 
 export async function checkKeyAllowed(_publicKeyBase64?: string): Promise<boolean> {
     try {
-        const response = await fetch('/api/keys/publishing-allowed');
+        const response = await apiFetch('/api/keys/publishing-allowed');
         if (!response.ok) return false;
         const data = await response.json();
         return data.allowed === true || data.Allowed === true;

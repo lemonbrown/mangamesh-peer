@@ -2,12 +2,14 @@
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Shared.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/import")]
     public class ImportController : ControllerBase
     {

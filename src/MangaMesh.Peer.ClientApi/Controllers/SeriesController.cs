@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MangaMesh.Shared.Models;
 using MangaMesh.Peer.Core.Manifests;
@@ -10,6 +11,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class SeriesController : ControllerBase
     {
         private readonly IManifestStore _manifestStore;
