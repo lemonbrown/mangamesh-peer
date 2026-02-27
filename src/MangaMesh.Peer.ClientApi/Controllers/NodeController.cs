@@ -1,11 +1,13 @@
 ﻿using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Peer.Core.Node;
 using MangaMesh.Peer.Core.Tracker;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class NodeController : ControllerBase
     {
@@ -32,9 +34,6 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         [HttpGet("status")]
         public async Task<IResult> GetStatus()
         {
-            // Rely on the background ReplicationService to maintain status
-            // var isConnected = await _trackerClient.CheckNodeExistsAsync(_nodeIdentity.NodeId);
-            // _nodeIdentity.UpdateStatus(isConnected);
 
             var stats = await _trackerClient.GetStatsAsync();
             var (_, seededCount) = await _manifestStore.GetSetHashAsync();

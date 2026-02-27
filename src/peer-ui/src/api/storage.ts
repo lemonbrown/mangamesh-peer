@@ -1,7 +1,8 @@
 import type { StorageStats, StoredManifest, StoredBlob, PagedResult } from '../types/api';
+import { apiFetch } from './client';
 
 export async function getStorageStats(): Promise<StorageStats> {
-    const response = await fetch('/api/node/storage');
+    const response = await apiFetch('/api/node/storage');
     if (!response.ok) throw new Error('Failed to fetch storage stats');
     return await response.json();
 }
@@ -11,20 +12,20 @@ export async function getStoredManifests(q?: string, offset = 0, limit = 20): Pr
     if (q) params.set('q', q);
     params.set('offset', String(offset));
     params.set('limit', String(limit));
-    const response = await fetch(`/api/node/storage/manifests?${params}`);
+    const response = await apiFetch(`/api/node/storage/manifests?${params}`);
     if (!response.ok) throw new Error('Failed to fetch manifests');
     return await response.json();
 }
 
 export async function deleteManifest(hash: string): Promise<void> {
-    const response = await fetch(`/api/node/storage/manifests/${hash}`, {
+    const response = await apiFetch(`/api/node/storage/manifests/${hash}`, {
         method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete manifest');
 }
 
 export async function bulkDeleteManifests(hashes: string[]): Promise<void> {
-    const response = await fetch('/api/node/storage/manifests', {
+    const response = await apiFetch('/api/node/storage/manifests', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(hashes)
@@ -36,13 +37,13 @@ export async function getStoredBlobs(offset = 0, limit = 50): Promise<PagedResul
     const params = new URLSearchParams();
     params.set('offset', String(offset));
     params.set('limit', String(limit));
-    const response = await fetch(`/api/node/storage/blobs?${params}`);
+    const response = await apiFetch(`/api/node/storage/blobs?${params}`);
     if (!response.ok) throw new Error('Failed to fetch blobs');
     return await response.json();
 }
 
 export async function bulkDeleteBlobs(hashes: string[]): Promise<void> {
-    const response = await fetch('/api/node/storage/blobs', {
+    const response = await apiFetch('/api/node/storage/blobs', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(hashes)

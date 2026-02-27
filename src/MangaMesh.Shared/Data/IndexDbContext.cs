@@ -11,6 +11,7 @@ namespace MangaMesh.Shared.Data
         public DbSet<ManifestEntryEntity> ManifestEntries { get; set; } = default!;
         public DbSet<ManifestAnnouncerEntity> ManifestAnnouncers { get; set; } = default!;
         public DbSet<SeriesDefinitionEntity> SeriesDefinitions { get; set; } = default!;
+        public DbSet<AdminUserEntity> AdminUsers { get; set; } = default!;
 
         public IndexDbContext(DbContextOptions<IndexDbContext> options) : base(options)
         {

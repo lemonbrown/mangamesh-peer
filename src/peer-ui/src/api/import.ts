@@ -1,8 +1,9 @@
 import type { ImportChapterRequest, ImportedChapter, AnalyzedChapterDto, ImportChapterResult } from '../types/api';
+import { apiFetch } from './client';
 
 
 export async function uploadChapters(files: FormData): Promise<AnalyzedChapterDto[]> {
-    const response = await fetch('/api/import/upload', {
+    const response = await apiFetch('/api/import/upload', {
         method: 'POST',
         body: files
     });
@@ -16,7 +17,7 @@ export async function uploadChapters(files: FormData): Promise<AnalyzedChapterDt
 
 
 export async function importChapter(request: ImportChapterRequest): Promise<ImportChapterResult> {
-    const response = await fetch('/api/import/chapter', {
+    const response = await apiFetch('/api/import/chapter', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -37,7 +38,7 @@ export async function importChapter(request: ImportChapterRequest): Promise<Impo
 }
 
 export async function getImportedChapters(): Promise<ImportedChapter[]> {
-    const response = await fetch('/api/import/chapters');
+    const response = await apiFetch('/api/import/chapters');
 
     if (!response.ok) {
         throw new Error(`Failed to fetch history: ${response.statusText}`);

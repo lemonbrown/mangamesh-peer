@@ -1,11 +1,13 @@
 using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Shared.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
     [ApiController]
+    [AllowAnonymous]
     [Route("api/[controller]")]
     public class BlobController : ControllerBase
     {

@@ -6,13 +6,13 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY ["MangaMesh.Peer/MangaMesh.Peer.Core/MangaMesh.Peer.Core.csproj", "MangaMesh.Peer/MangaMesh.Peer.Core/"]
-COPY ["MangaMesh.Shared/MangaMesh.Shared.csproj", "MangaMesh.Shared/"]
+COPY ["mangamesh-peer/src/MangaMesh.Peer.Core/MangaMesh.Peer.Core.csproj", "mangamesh-peer/src/MangaMesh.Peer.Core/"]
+COPY ["mangamesh-peer/src/MangaMesh.Shared/MangaMesh.Shared.csproj", "mangamesh-peer/src/MangaMesh.Shared/"]
 
-RUN dotnet restore "MangaMesh.Peer/MangaMesh.Peer.Core/MangaMesh.Peer.Core.csproj"
+RUN dotnet restore "mangamesh-peer/src/MangaMesh.Peer.Core/MangaMesh.Peer.Core.csproj"
 
 COPY . .
-WORKDIR "/src/MangaMesh.Peer/MangaMesh.Peer.Core"
+WORKDIR "/src/mangamesh-peer/src/MangaMesh.Peer.Core"
 RUN dotnet build "MangaMesh.Peer.Core.csproj" -c Release -o /app/build
 
 # Publish stage

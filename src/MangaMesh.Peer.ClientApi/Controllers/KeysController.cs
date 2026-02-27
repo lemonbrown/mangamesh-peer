@@ -1,10 +1,13 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MangaMesh.Peer.Core.Keys;
 using MangaMesh.Peer.Core.Tracker;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
+    [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class KeysController : ControllerBase
     {

@@ -1,9 +1,10 @@
 import type { NodeStatus } from '../types/api';
+import { apiFetch } from './client';
 
 const API_BASE_URL = ''; // Relative path for Docker/Production
 
 export async function getNodeStatus(): Promise<NodeStatus> {
-    const response = await fetch(`${API_BASE_URL}/api/node/status`);
+    const response = await apiFetch(`${API_BASE_URL}/api/node/status`);
     if (!response.ok) {
         throw new Error('Failed to fetch node status');
     }
@@ -11,7 +12,7 @@ export async function getNodeStatus(): Promise<NodeStatus> {
 }
 
 export async function getStorageStats(): Promise<import('../types/api').StorageStats> {
-    const response = await fetch(`${API_BASE_URL}/api/node/storage`);
+    const response = await apiFetch(`${API_BASE_URL}/api/node/storage`);
     if (!response.ok) {
         throw new Error('Failed to fetch storage stats');
     }
@@ -19,7 +20,7 @@ export async function getStorageStats(): Promise<import('../types/api').StorageS
 }
 
 export async function getKnownNodes(): Promise<import('../types/api').KnownNode[]> {
-    const response = await fetch(`${API_BASE_URL}/api/node/peers`);
+    const response = await apiFetch(`${API_BASE_URL}/api/node/peers`);
     if (!response.ok) {
         throw new Error('Failed to fetch known nodes');
     }
