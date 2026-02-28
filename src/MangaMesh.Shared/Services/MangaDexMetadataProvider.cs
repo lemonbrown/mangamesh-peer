@@ -90,7 +90,7 @@ namespace MangaMesh.Shared.Services
                 {
                     Source = ExternalMetadataSource.MangaDex,
                     ExternalMangaId = m.Id,
-                    Title = m.Attributes.Title.Values.FirstOrDefault() ?? "Unknown Title",
+                    Title = PickEnglishTitle(m.Attributes.Title, m.Attributes.AltTitles),
                     AltTitles = m.Attributes.AltTitles.SelectMany(d => d.Values).ToList(),
                     Status = m.Attributes.Status,
                     Year = m.Attributes.Year,
@@ -119,7 +119,7 @@ namespace MangaMesh.Shared.Services
                 {
                     Source = ExternalMetadataSource.MangaDex,
                     ExternalMangaId = m.Id,
-                    CanonicalTitle = m.Attributes.Title.Values.FirstOrDefault() ?? "Unknown Title",
+                    CanonicalTitle = PickEnglishTitle(m.Attributes.Title, m.Attributes.AltTitles),
                     AltTitles = m.Attributes.AltTitles.SelectMany(d => d.Values).ToList(),
                     Status = m.Attributes.Status,
                     Description = m.Attributes.Description.Values.FirstOrDefault(),
@@ -208,6 +208,27 @@ namespace MangaMesh.Shared.Services
                 return null;
             }
         }
+        /// <summary>
+        /// Returns the best English title from a MangaDex title/altTitles pair.
+        /// Priority: Title["en"] → AltTitles["en"] → Title.Values.First().
+        /// </summary>
+        private static string PickEnglishTitle(
+            Dictionary<string, string> title,
+            List<Dictionary<string, string>> altTitles)
+        {
+            if (title.TryGetValue("en", out var enTitle) && !string.IsNullOrWhiteSpace(enTitle))
+                return enTitle;
+
+            var enAlt = altTitles
+                .Where(d => d.TryGetValue("en", out var v) && !string.IsNullOrWhiteSpace(v))
+                .Select(d => d["en"])
+                .FirstOrDefault();
+            if (enAlt != null)
+                return enAlt;
+
+            return title.Values.FirstOrDefault() ?? "Unknown Title";
+        }
+
         private static string? GetStringAttribute(Dictionary<string, object>? attributes, string key)
         {
             if (attributes == null || !attributes.TryGetValue(key, out var value) || value == null)

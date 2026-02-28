@@ -62,7 +62,7 @@ namespace MangaMesh.Peer.Core.Node
                         continue;
                     }
 
-                    await _manifestStore.PutAsync(manifest);
+                    await _manifestStore.SaveAsync(hash, manifest);
                     _logger.LogInformation("Stored chapter manifest {Hash}, fetching {PageCount} page blobs", manifestHash, manifest.Files.Count);
 
                     await FetchAllPageDataAsync(address, manifest);
@@ -97,24 +97,50 @@ namespace MangaMesh.Peer.Core.Node
             if (addresses.Count == 0)
             {
                 _logger.LogInformation("DHT found no providers; falling back to tracker peer list for {Hash}", manifestHash);
-                var peers = await _peerLocator.GetPeersForManifestAsync(manifestHash);
-
-                foreach (var peer in peers)
+                try
                 {
-                    try
-                    {
-                        var nodeIdBytes = Convert.FromHexString(peer.NodeId);
-                        var address = _dhtNode.RoutingTable.GetAddressForNode(nodeIdBytes);
-                        if (address != null)
-                            addresses.Add(address);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "Could not resolve address for NodeId {NodeId}", peer.NodeId);
-                    }
-                }
+                    var peers = await _peerLocator.GetPeersForManifestAsync(manifestHash);
+                    _logger.LogInformation("Tracker returned {Count} peer(s) for {Hash}", peers.Count, manifestHash);
 
-                _logger.LogInformation("Tracker fallback resolved {Count} peer address(es) for {Hash}", addresses.Count, manifestHash);
+                    foreach (var peer in peers)
+                    {
+                        try
+                        {
+                            var nodeIdBytes = Convert.FromHexString(peer.NodeId);
+                            var address = _dhtNode.RoutingTable.GetAddressForNode(nodeIdBytes);
+                            if (address != null)
+                            {
+                                addresses.Add(address);
+                                _logger.LogInformation("Resolved tracker peer {NodeId} to {Host}:{Port}", peer.NodeId, address.Host, address.Port);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Address for NodeId {NodeId} not found in local routing table. Searching DHT for node...", peer.NodeId);
+                                var foundNodes = await _dhtNode.FindNodeAsync(nodeIdBytes);
+                                var targetEntry = foundNodes.FirstOrDefault(n => n.NodeId != null && n.NodeId.SequenceEqual(nodeIdBytes));
+                                if (targetEntry != null && targetEntry.Address != null)
+                                {
+                                    addresses.Add(targetEntry.Address);
+                                    _logger.LogInformation("Actively resolved tracker peer {NodeId} to {Host}:{Port} via DHT FindNode", peer.NodeId, targetEntry.Address.Host, targetEntry.Address.Port);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("Active DHT lookup for NodeId {NodeId} failed to find the peer.", peer.NodeId);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Could not resolve address for NodeId {NodeId}", peer.NodeId);
+                        }
+                    }
+
+                    _logger.LogInformation("Tracker fallback resolved {Count} peer address(es) for {Hash}", addresses.Count, manifestHash);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Exception while fetching fallback peer list from tracker for {Hash}", manifestHash);
+                }
             }
 
             return addresses;
@@ -122,14 +148,25 @@ namespace MangaMesh.Peer.Core.Node
 
         private async Task<ChapterManifest?> FetchChapterManifestAsync(NodeAddress address, string manifestHash)
         {
-            var request = new GetManifest { ContentHash = manifestHash };
-            var response = await _dhtNode.SendContentRequestAsync(address, request, TimeSpan.FromSeconds(30));
+            try
+            {
+                var request = new GetManifest { ContentHash = manifestHash };
+                var response = await _dhtNode.SendContentRequestAsync(address, request, TimeSpan.FromSeconds(30));
 
-            if (response is not ManifestData data)
-                return null;
+                if (response is not ManifestData data)
+                {
+                    _logger.LogWarning("Peer {Host}:{Port} replied but result was not ManifestData.", address.Host, address.Port);
+                    return null;
+                }
 
-            var json = Encoding.UTF8.GetString(data.Data);
-            return JsonSerializer.Deserialize<ChapterManifest>(json);
+                var json = Encoding.UTF8.GetString(data.Data);
+                return JsonSerializer.Deserialize<ChapterManifest>(json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "FetchChapterManifestAsync failed for {Host}:{Port}", address.Host, address.Port);
+                throw;
+            }
         }
 
         private async Task FetchAllPageDataAsync(NodeAddress sourceAddress, ChapterManifest manifest)

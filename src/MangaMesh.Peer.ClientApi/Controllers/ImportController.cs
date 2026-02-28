@@ -1,6 +1,7 @@
 ﻿using MangaMesh.Peer.ClientApi.Models;
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Manifests;
+using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,12 +15,14 @@ namespace MangaMesh.Peer.ClientApi.Controllers
     public class ImportController : ControllerBase
     {
         private readonly IImportChapterService _importer;
+        private readonly ISeriesRegistry _seriesRegistry;
         private readonly string _inputDirectory = Path.Combine(AppContext.BaseDirectory, "input");
         private readonly string _importedChaptersFile;
 
-        public ImportController(IImportChapterService importer)
+        public ImportController(IImportChapterService importer, ISeriesRegistry seriesRegistry)
         {
             _importer = importer;
+            _seriesRegistry = seriesRegistry;
             _importedChaptersFile = Path.Combine(_inputDirectory, "imported_chapters.json");
         }
 
@@ -36,6 +39,26 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             var chapters = JsonSerializer.Deserialize<IEnumerable<ImportChapterRequestDto>>(json);
 
             return Ok(chapters);
+        }
+
+        [HttpGet("chapter-exists")]
+        public async Task<ActionResult<bool>> CheckChapterExists(
+            [FromQuery] ExternalMetadataSource source,
+            [FromQuery] string externalMangaId,
+            [FromQuery] double chapterNumber)
+        {
+            try
+            {
+                var (seriesId, _) = await _seriesRegistry.RegisterSeriesAsync(source, externalMangaId);
+                var chapters = await _seriesRegistry.GetSeriesChaptersAsync(seriesId);
+                return Ok(chapters.Any(c => c.ChapterNumber == chapterNumber));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR: CheckChapterExists failed: {ex.Message}");
+                // If the check fails (e.g. tracker down), we return false to let the main import flow try and report errors
+                return Ok(false);
+            }
         }
 
         [HttpPost("chapter")]

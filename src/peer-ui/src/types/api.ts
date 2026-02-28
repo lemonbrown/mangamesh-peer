@@ -211,6 +211,30 @@ export interface StoredManifest {
     createdUtc: string;
 }
 
+export type FlagCategory =
+    | 'quality_low'
+    | 'page_order'
+    | 'missing_pages'
+    | 'wrong_chapter'
+    | 'duplicate'
+    | 'nsfw'
+    | 'malicious_content'
+    | 'bad_title';
+
+export interface FlagRequest {
+    manifestHash: string;
+    categories: FlagCategory[];
+    comment?: string;
+}
+
+export interface FlagSummary {
+    manifestHash: string;
+    totalFlags: number;
+    peerCount: number;
+    hasMultiplePeerFlags: boolean;
+    topCategories: FlagCategory[];
+}
+
 export interface PagedResult<T> {
     items: T[];
     total: number;

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getNodeStatus } from '../api/node';
 import type { NodeStatus } from '../types/api';
+import { APP_VERSION } from '../version';
 
 const NodeStatusIndicator: React.FC = () => {
     const [status, setStatus] = useState<NodeStatus | null>(null);
@@ -38,7 +39,8 @@ const NodeStatusIndicator: React.FC = () => {
     };
 
     return (
-        <div className="relative">
+        <div className="relative flex items-center gap-2">
+            <span className="font-mono text-slate-600 text-[10px]">{APP_VERSION}</span>
             <button
                 onClick={() => setShowDetails(!showDetails)}
                 className="flex items-center gap-2 px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"

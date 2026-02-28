@@ -189,6 +189,21 @@ namespace MangaMesh.Peer.Core.Tracker
                    ?? Enumerable.Empty<SeriesSummaryResponse>();
         }
 
+        public async Task<IEnumerable<ChapterSummaryResponse>> GetSeriesChaptersAsync(string seriesId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"/api/series/{Uri.EscapeDataString(seriesId)}/chapters");
+                if (!response.IsSuccessStatusCode) return Enumerable.Empty<ChapterSummaryResponse>();
+                return await response.Content.ReadFromJsonAsync<IEnumerable<ChapterSummaryResponse>>()
+                       ?? Enumerable.Empty<ChapterSummaryResponse>();
+            }
+            catch
+            {
+                return Enumerable.Empty<ChapterSummaryResponse>();
+            }
+        }
+
         public async Task<TrackerStats> GetStatsAsync()
         {
             try

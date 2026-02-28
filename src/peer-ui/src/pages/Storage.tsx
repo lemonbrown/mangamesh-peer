@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getStorageStats, getStoredManifests, getStoredBlobs, deleteManifest, bulkDeleteManifests, bulkDeleteBlobs } from '../api/storage';
 import type { StorageStats, StoredManifest, StoredBlob } from '../types/api';
 import StorageBar from '../components/StorageBar';
+import LangFlag from '../components/LangFlag';
 
 const MANIFEST_PAGE_SIZE = 20;
 const BLOB_PAGE_SIZE = 50;
@@ -221,7 +222,7 @@ function ManifestsTab({ stats, onStatsChanged }: { stats: StorageStats; onStatsC
                                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">Vol {m.volume}</span>
                                                 )}
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">Ch {m.chapterNumber}</span>
-                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700">{m.language.toUpperCase()}</span>
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 inline-flex items-center gap-1"><LangFlag code={m.language} /> {m.language.toUpperCase()}</span>
                                             </div>
                                             <div className="flex items-center text-xs text-gray-500 space-x-2">
                                                 <span className="font-mono text-gray-400" title={`Hash: ${m.hash}`}>#{m.hash.substring(0, 8)}</span>

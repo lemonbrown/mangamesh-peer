@@ -34,6 +34,13 @@ namespace MangaMesh.Peer.ClientApi.Middleware
                 return;
             }
 
+            // Proxy /api/flags -> tracker (flag submissions and summaries live on the Index API)
+            if (path.StartsWith("/api/flags", StringComparison.OrdinalIgnoreCase))
+            {
+                await ProxyRequest(context, path);
+                return;
+            }
+
             // Proxy /covers/ -> /covers/ (static cover art served by Index API)
             if (path.StartsWith("/covers/", StringComparison.OrdinalIgnoreCase))
             {

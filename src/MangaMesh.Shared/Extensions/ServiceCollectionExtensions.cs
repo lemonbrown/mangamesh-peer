@@ -15,6 +15,7 @@ namespace MangaMesh.Shared.Extensions
             services.AddScoped<IPublicKeyStore, SqlitePublicKeyStore>();
             services.AddScoped<IApprovedKeyStore, SqliteApprovedKeyStore>();
             services.AddScoped<IChallengeStore, SqliteChallengeStore>();
+            services.AddScoped<IFlagStore, SqliteFlagStore>();
 
             return services;
         }

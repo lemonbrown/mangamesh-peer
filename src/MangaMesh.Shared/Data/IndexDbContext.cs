@@ -12,6 +12,7 @@ namespace MangaMesh.Shared.Data
         public DbSet<ManifestAnnouncerEntity> ManifestAnnouncers { get; set; } = default!;
         public DbSet<SeriesDefinitionEntity> SeriesDefinitions { get; set; } = default!;
         public DbSet<AdminUserEntity> AdminUsers { get; set; } = default!;
+        public DbSet<ChapterFlagEntity> ChapterFlags { get; set; } = default!;
 
         public IndexDbContext(DbContextOptions<IndexDbContext> options) : base(options)
         {
@@ -36,6 +37,12 @@ namespace MangaMesh.Shared.Data
             modelBuilder.Entity<SeriesDefinitionEntity>(entity =>
             {
                 entity.HasIndex(e => new { e.Source, e.ExternalMangaId });
+            });
+
+            modelBuilder.Entity<ChapterFlagEntity>(entity =>
+            {
+                entity.HasIndex(e => e.ManifestHash);
+                entity.HasIndex(e => e.SeriesId);
             });
         }
     }

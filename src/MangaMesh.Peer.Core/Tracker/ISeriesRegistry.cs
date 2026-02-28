@@ -7,6 +7,7 @@ namespace MangaMesh.Peer.Core.Tracker
     {
         Task<(string SeriesId, string Title)> RegisterSeriesAsync(ExternalMetadataSource source, string externalMangaId);
         Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null, string[]? ids = null);
+        Task<IEnumerable<ChapterSummaryResponse>> GetSeriesChaptersAsync(string seriesId);
         Task<TrackerStats> GetStatsAsync();
     }
 }

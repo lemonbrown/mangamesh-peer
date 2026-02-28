@@ -53,6 +53,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '^/api/flags': {
+        target: metadataApiUrl,
+        changeOrigin: true,
+        secure: false
+      },
       '^/gateway': {
         target: gatewayUrl,
         changeOrigin: true,

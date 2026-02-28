@@ -3,6 +3,7 @@ import { importChapter, getImportedChapters, uploadChapters } from '../api/impor
 import { getKeys, requestChallenge, solveChallenge, verifySignature, checkKeyAllowed } from '../api/keys';
 import { searchMetadata } from '../api/series'; // Changed import
 import type { ImportChapterRequest, KeyPair, AnalyzedChapterDto, SeriesSearchResult } from '../types/api';
+import LangFlag from '../components/LangFlag';
 
 const LANGUAGES: Record<string, string> = {
     en: 'English', ja: 'Japanese', es: 'Spanish', fr: 'French',
@@ -704,7 +705,7 @@ export default function ImportChapter() {
                                                     <div>
                                                         <h3 className="font-medium text-gray-900">{item.displayName}</h3>
                                                         <p className="text-sm text-gray-600 mt-1">
-                                                            {item.seriesId} • {item.scanlatorId} • {item.language.toUpperCase()}
+                                                            {item.seriesId} • {item.scanlatorId} • <LangFlag code={item.language} /> {item.language.toUpperCase()}
                                                         </p>
                                                         <p className="text-xs text-gray-400 mt-1 font-mono break-all">
                                                             {item.sourcePath}
