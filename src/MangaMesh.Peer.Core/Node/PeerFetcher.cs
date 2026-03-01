@@ -32,14 +32,14 @@ namespace MangaMesh.Peer.Core.Node
             _logger = logger;
         }
 
-        public async Task<ManifestHash> FetchManifestAsync(string manifestHash)
+        public async Task<(ManifestHash Hash, string? DeliveredByNodeId)> FetchManifestAsync(string manifestHash)
         {
             var hash = new ManifestHash(manifestHash);
 
             if (await _manifestStore.ExistsAsync(hash))
             {
                 _logger.LogInformation("Manifest {Hash} already available locally", manifestHash);
-                return hash;
+                return (hash, null);
             }
 
             _logger.LogInformation("Fetching manifest {Hash} from peers via DHT", manifestHash);
@@ -49,7 +49,7 @@ namespace MangaMesh.Peer.Core.Node
                 throw new InvalidOperationException(
                     $"No peers found for manifest {manifestHash}. Ensure at least one peer is online and has announced this manifest.");
 
-            foreach (var address in providers)
+            foreach (var (address, nodeId) in providers)
             {
                 try
                 {
@@ -67,8 +67,8 @@ namespace MangaMesh.Peer.Core.Node
 
                     await FetchAllPageDataAsync(address, manifest);
 
-                    _logger.LogInformation("Successfully fetched and stored manifest {Hash} with all page content", manifestHash);
-                    return hash;
+                    _logger.LogInformation("Successfully fetched and stored manifest {Hash} with all page content from peer {NodeId}", manifestHash, nodeId ?? "unknown");
+                    return (hash, nodeId);
                 }
                 catch (Exception ex)
                 {
@@ -80,21 +80,24 @@ namespace MangaMesh.Peer.Core.Node
                 $"Could not fetch manifest {manifestHash} from any of the {providers.Count} available peer(s).");
         }
 
-        private async Task<List<NodeAddress>> FindProvidersAsync(string manifestHash)
+        private async Task<List<(NodeAddress Address, string? NodeId)>> FindProvidersAsync(string manifestHash)
         {
-            var addresses = new List<NodeAddress>();
+            var providers = new List<(NodeAddress Address, string? NodeId)>();
 
             byte[] hashBytes;
             try { hashBytes = Convert.FromHexString(manifestHash); }
             catch { hashBytes = Encoding.UTF8.GetBytes(manifestHash); }
 
             // Primary: DHT lookup — finds nodes that stored this manifest hash
-            var providers = await _dhtNode.FindValueWithAddressAsync(hashBytes);
-            addresses.AddRange(providers.Select(p => p.Address));
-            _logger.LogInformation("DHT lookup for {Hash} found {Count} provider(s)", manifestHash, addresses.Count);
+            var dhtProviders = await _dhtNode.FindValueWithAddressAsync(hashBytes);
+            providers.AddRange(dhtProviders.Select(p => (
+                p.Address,
+                p.NodeId is { Length: > 0 } ? Convert.ToHexString(p.NodeId).ToLower() : (string?)null
+            )));
+            _logger.LogInformation("DHT lookup for {Hash} found {Count} provider(s)", manifestHash, providers.Count);
 
             // Fallback: ask tracker for peer NodeIds then resolve via routing table
-            if (addresses.Count == 0)
+            if (providers.Count == 0)
             {
                 _logger.LogInformation("DHT found no providers; falling back to tracker peer list for {Hash}", manifestHash);
                 try
@@ -110,7 +113,7 @@ namespace MangaMesh.Peer.Core.Node
                             var address = _dhtNode.RoutingTable.GetAddressForNode(nodeIdBytes);
                             if (address != null)
                             {
-                                addresses.Add(address);
+                                providers.Add((address, peer.NodeId));
                                 _logger.LogInformation("Resolved tracker peer {NodeId} to {Host}:{Port}", peer.NodeId, address.Host, address.Port);
                             }
                             else
@@ -120,7 +123,7 @@ namespace MangaMesh.Peer.Core.Node
                                 var targetEntry = foundNodes.FirstOrDefault(n => n.NodeId != null && n.NodeId.SequenceEqual(nodeIdBytes));
                                 if (targetEntry != null && targetEntry.Address != null)
                                 {
-                                    addresses.Add(targetEntry.Address);
+                                    providers.Add((targetEntry.Address, peer.NodeId));
                                     _logger.LogInformation("Actively resolved tracker peer {NodeId} to {Host}:{Port} via DHT FindNode", peer.NodeId, targetEntry.Address.Host, targetEntry.Address.Port);
                                 }
                                 else
@@ -135,7 +138,7 @@ namespace MangaMesh.Peer.Core.Node
                         }
                     }
 
-                    _logger.LogInformation("Tracker fallback resolved {Count} peer address(es) for {Hash}", addresses.Count, manifestHash);
+                    _logger.LogInformation("Tracker fallback resolved {Count} peer address(es) for {Hash}", providers.Count, manifestHash);
                 }
                 catch (Exception ex)
                 {
@@ -143,7 +146,7 @@ namespace MangaMesh.Peer.Core.Node
                 }
             }
 
-            return addresses;
+            return providers;
         }
 
         private async Task<ChapterManifest?> FetchChapterManifestAsync(NodeAddress address, string manifestHash)

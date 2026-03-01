@@ -17,5 +17,6 @@ namespace MangaMesh.Shared.Models
 
         public DateTime AnnouncedUtc { get; set; }
         public DateTime LastSeenUtc { get; set; }
+        public bool IsQuarantined { get; set; } = false;
     }
 }

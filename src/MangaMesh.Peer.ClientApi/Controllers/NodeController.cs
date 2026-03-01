@@ -16,19 +16,22 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         private readonly IManifestStore _manifestStore;
         private readonly IConfiguration _configuration;
         private readonly IDhtNode _dhtNode;
+        private readonly IPeerLocator _peerLocator;
 
         public NodeController(
             INodeIdentityService nodeIdentity,
             ISeriesRegistry trackerClient,
             IManifestStore manifestStore,
             IConfiguration configuration,
-            IDhtNode dhtNode)
+            IDhtNode dhtNode,
+            IPeerLocator peerLocator)
         {
             _nodeIdentity = nodeIdentity;
             _trackerClient = trackerClient;
             _manifestStore = manifestStore;
             _configuration = configuration;
             _dhtNode = dhtNode;
+            _peerLocator = peerLocator;
         }
 
         [HttpGet("status")]
@@ -65,6 +68,25 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             });
 
             return Results.Ok(result);
+        }
+
+        [HttpGet("peers/manifest/{manifestHash}")]
+        public async Task<IResult> GetManifestPeers(string manifestHash)
+        {
+            try
+            {
+                var peers = await _peerLocator.GetPeersForManifestAsync(manifestHash);
+                var result = peers.Select(p => new
+                {
+                    nodeId = p.NodeId,
+                    lastSeen = p.LastSeen
+                });
+                return Results.Ok(result);
+            }
+            catch
+            {
+                return Results.Ok(Array.Empty<object>());
+            }
         }
     }
 }

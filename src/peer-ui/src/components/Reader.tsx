@@ -4,6 +4,7 @@ import { readChapter, getChapterDetails } from '../api/series';
 import { getManifestFlagSummary, loadLocallyFlagged, saveLocallyFlagged } from '../api/flags';
 import type { FullChapterManifest } from '../types/api';
 import FlagModal from './FlagModal';
+import ReportPeerModal from './ReportPeerModal';
 
 export default function Reader() {
     const { seriesId, chapterId } = useParams<{ seriesId: string, chapterId: string }>();
@@ -20,6 +21,7 @@ export default function Reader() {
     const [warningDismissed, setWarningDismissed] = useState(false);
     const [isLocallyFlagged, setIsLocallyFlagged] = useState(false);
     const [flagModalOpen, setFlagModalOpen] = useState(false);
+    const [reportPeerModalOpen, setReportPeerModalOpen] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -126,6 +128,19 @@ export default function Reader() {
                 </div>
 
                 <div className="flex items-center space-x-4">
+                    {/* Report peer button */}
+                    <button
+                        type="button"
+                        onClick={() => setReportPeerModalOpen(true)}
+                        title="Report a peer delivering wrong or switched content"
+                        className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-orange-400 transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        </svg>
+                        <span className="hidden sm:inline">Report Peer</span>
+                    </button>
+
                     {/* Flag button */}
                     <button
                         type="button"
@@ -223,6 +238,17 @@ export default function Reader() {
                     chapterLabel={chapterLabel}
                     onClose={() => setFlagModalOpen(false)}
                     onSubmitted={handleFlagSubmitted}
+                />
+            )}
+
+            {/* Report peer modal */}
+            {reportPeerModalOpen && resolvedHash && (
+                <ReportPeerModal
+                    manifestHash={resolvedHash}
+                    chapterLabel={chapterLabel}
+                    defaultNodeId={manifest?.deliveredByNodeId}
+                    onClose={() => setReportPeerModalOpen(false)}
+                    onSubmitted={() => setReportPeerModalOpen(false)}
                 />
             )}
         </div>

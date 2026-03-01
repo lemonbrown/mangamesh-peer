@@ -1,0 +1,36 @@
+# Dependencies — installed fresh inside the build stage
+node_modules
+
+# Build output — produced fresh inside the image
+dist
+
+# Vite cache
+.vite
+
+# Environment files — must be injected at runtime via docker-compose, never baked in
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor & IDE
+.vs
+.vscode
+*.suo
+*.user
+.editorconfig
+
+# Git
+.git
+.gitignore
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db

@@ -16,7 +16,7 @@ export async function addSubscription(seriesId: string, subscription: Partial<Se
         body: JSON.stringify({
             seriesId,
             language: subscription.language || 'en',
-            autoFetch: true,
+            autoFetch: false,
             autoFetchScanlators: subscription.autoFetchScanlators || []
         })
     });

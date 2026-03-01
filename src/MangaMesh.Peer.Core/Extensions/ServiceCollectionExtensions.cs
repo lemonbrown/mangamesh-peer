@@ -27,7 +27,7 @@ namespace MangaMesh.Peer.Core.Extensions
             {
                 var config = sp.GetRequiredService<IConfiguration>();
                 var port = config.GetValue<int>("Dht:Port", 3001);
-                return new TcpTransport(listenPort: port);
+                return new TcpTransport(listenPort: port, sp.GetRequiredService<ILogger<TcpTransport>>());
             });
 
             services.AddSingleton<IDhtStorage, InMemoryDhtStorage>();
@@ -72,7 +72,7 @@ namespace MangaMesh.Peer.Core.Extensions
             
             services.AddSingleton<ProtocolRouter>(sp =>
             {
-                var router = new ProtocolRouter();
+                var router = new ProtocolRouter(sp.GetRequiredService<ILogger<ProtocolRouter>>());
                 router.Register(sp.GetRequiredService<DhtProtocolHandler>());
                 router.Register(sp.GetRequiredService<ContentProtocolHandler>());
                 return router;

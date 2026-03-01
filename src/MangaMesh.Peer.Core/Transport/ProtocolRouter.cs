@@ -1,12 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace MangaMesh.Peer.Core.Transport
 {
     public class ProtocolRouter
     {
         private readonly Dictionary<ProtocolKind, IProtocolHandler> _handlers = new();
+        private readonly ILogger<ProtocolRouter> _logger;
+
+        public ProtocolRouter(ILogger<ProtocolRouter> logger)
+        {
+            _logger = logger;
+        }
 
         public void Register(IProtocolHandler handler)
         {
@@ -24,7 +31,7 @@ namespace MangaMesh.Peer.Core.Transport
             }
             else
             {
-                Console.WriteLine($"Unknown protocol kind: {kind}");
+                _logger.LogWarning("Unhandled protocol kind {Kind} from {Host}", kind, from.Host);
             }
         }
     }

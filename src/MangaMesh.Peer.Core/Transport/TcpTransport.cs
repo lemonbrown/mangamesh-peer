@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace MangaMesh.Peer.Core.Transport
 {
@@ -12,14 +13,17 @@ namespace MangaMesh.Peer.Core.Transport
     {
         private readonly int _listenPort;
         private readonly TcpListener _listener;
-        
+        private readonly ILogger<TcpTransport> _logger;
+
         public event Func<NodeAddress, ReadOnlyMemory<byte>, Task>? OnMessage;
 
-        public TcpTransport(int listenPort)
+        public TcpTransport(int listenPort, ILogger<TcpTransport> logger)
         {
             _listenPort = listenPort;
+            _logger = logger;
             _listener = new TcpListener(IPAddress.Any, _listenPort);
             _listener.Start();
+            _logger.LogInformation("TCP transport listening on port {Port}", _listenPort);
 
             Task.Run(AcceptLoopAsync);
         }
@@ -101,7 +105,7 @@ namespace MangaMesh.Peer.Core.Transport
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TCP] Send failed: {ex.Message}");
+                _logger.LogWarning(ex, "TCP send failed to {Host}:{Port}", to.Host, to.Port);
             }
         }
     }

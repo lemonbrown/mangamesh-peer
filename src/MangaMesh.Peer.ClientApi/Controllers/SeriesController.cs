@@ -6,6 +6,8 @@ using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Peer.Core.Node;
 using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Peer.Core.Tracker;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
@@ -39,7 +41,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             try
             {
                 // Ensure manifest and pages are available locally (fetch from peers if needed)
-                var storedHash = await _peerFetcher.FetchManifestAsync(manifestHash);
+                var (storedHash, deliveredByNodeId) = await _peerFetcher.FetchManifestAsync(manifestHash);
 
                 // Retrieve the manifest from local store
                 var manifest = await _manifestStore.GetAsync(storedHash);
@@ -49,7 +51,12 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                     return Results.Problem("Manifest downloaded but not found in store");
                 }
 
-                return Results.Ok(manifest);
+                // Serialize manifest and inject deliveredByNodeId so the client knows which peer sent the content
+                var json = JsonSerializer.SerializeToNode(manifest, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
+                if (deliveredByNodeId != null)
+                    json["deliveredByNodeId"] = deliveredByNodeId;
+
+                return Results.Ok(json);
             }
             catch (Exception ex)
             {

@@ -1,5 +1,6 @@
 ﻿using MangaMesh.Peer.Core.Configuration;
 using MangaMesh.Peer.Core.Storage;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -14,12 +15,15 @@ namespace MangaMesh.Peer.Core.Blob
     {
         private readonly string _root;
         private readonly IStorageMonitorService _storageMonitor;
+        private readonly ILogger<BlobStore> _logger;
 
-        public BlobStore(IOptions<BlobStoreOptions> options, IStorageMonitorService storageMonitor)
+        public BlobStore(IOptions<BlobStoreOptions> options, IStorageMonitorService storageMonitor, ILogger<BlobStore> logger)
         {
             _root = options.Value.RootPath;
             _storageMonitor = storageMonitor;
+            _logger = logger;
             Directory.CreateDirectory(_root);
+            _logger.LogInformation("BlobStore root: {Root}", _root);
         }
 
         public async Task<BlobHash> PutAsync(Stream data)
@@ -36,7 +40,10 @@ namespace MangaMesh.Peer.Core.Blob
 
             var path = GetPath(blobHash);
             if (File.Exists(path))
+            {
+                _logger.LogDebug("Blob {Hash} already exists, skipping write", hash);
                 return blobHash;
+            }
 
             await _storageMonitor.EnsureStorageAvailable(temp.Length);
 
@@ -51,6 +58,7 @@ namespace MangaMesh.Peer.Core.Blob
             File.Move(tmpPath, path, overwrite: false);
 
             _storageMonitor.NotifyBlobWritten(temp.Length);
+            _logger.LogDebug("Stored blob {Hash} ({Bytes} bytes)", hash, temp.Length);
 
             return blobHash;
         }
@@ -77,7 +85,10 @@ namespace MangaMesh.Peer.Core.Blob
         {
             var path = GetPath(hash);
             if (File.Exists(path))
+            {
                 File.Delete(path);
+                _logger.LogInformation("Deleted blob {Hash}", hash.Value);
+            }
         }
 
         public IEnumerable<BlobHash> GetAllHashes()

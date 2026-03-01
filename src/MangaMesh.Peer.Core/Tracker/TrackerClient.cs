@@ -1,5 +1,6 @@
 ﻿using MangaMesh.Peer.Core.Series;
 using MangaMesh.Shared.Models;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,10 +13,12 @@ namespace MangaMesh.Peer.Core.Tracker
     public sealed class TrackerClient : ITrackerClient
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<TrackerClient> _logger;
 
-        public TrackerClient(HttpClient http)
+        public TrackerClient(HttpClient http, ILogger<TrackerClient> logger)
         {
             _httpClient = http;
+            _logger = logger;
         }
 
         public async Task<bool> PingAsync(string nodeId, string manifestSetHash, int manifestCount)
@@ -23,16 +26,13 @@ namespace MangaMesh.Peer.Core.Tracker
             try
             {
                 var request = new PingRequest(nodeId, manifestSetHash, manifestCount);
-                // POST /ping matches the implementation plan and controller expectation
                 var response = await _httpClient.PostAsJsonAsync("/ping", request);
-
-                // 200 OK = Synced
-                // 409 Conflict = Sync Needed
+                // 200 OK = Synced, 409 Conflict = Sync Needed
                 return response.StatusCode == System.Net.HttpStatusCode.OK;
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback to sync needed on error
+                _logger.LogWarning(ex, "Ping to tracker failed; treating as sync-needed");
                 return false;
             }
         }
@@ -61,8 +61,9 @@ namespace MangaMesh.Peer.Core.Tracker
 
                 return await response.Content.ReadFromJsonAsync<PeerInfo>();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "GetPeer failed for manifest {ManifestHash}", manifestHash);
                 return null;
             }
         }
@@ -136,8 +137,9 @@ namespace MangaMesh.Peer.Core.Tracker
                 var response = await _httpClient.SendAsync(request);
                 return response.IsSuccessStatusCode;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "CheckNodeExists failed for node {NodeId}", nodeId);
                 return false;
             }
         }
@@ -198,8 +200,9 @@ namespace MangaMesh.Peer.Core.Tracker
                 return await response.Content.ReadFromJsonAsync<IEnumerable<ChapterSummaryResponse>>()
                        ?? Enumerable.Empty<ChapterSummaryResponse>();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "GetSeriesChapters failed for series {SeriesId}", seriesId);
                 return Enumerable.Empty<ChapterSummaryResponse>();
             }
         }
@@ -213,11 +216,13 @@ namespace MangaMesh.Peer.Core.Tracker
 
                 return await response.Content.ReadFromJsonAsync<TrackerStats>() ?? new TrackerStats();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "GetStats failed");
                 return new TrackerStats();
             }
         }
+
         public async Task<bool> CheckKeyAllowedAsync(string publicKeyBase64)
         {
             try
@@ -227,8 +232,9 @@ namespace MangaMesh.Peer.Core.Tracker
                 var data = await response.Content.ReadFromJsonAsync<KeyAllowedResponse>();
                 return data?.Allowed ?? false;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "CheckKeyAllowed failed");
                 return false;
             }
         }

@@ -35,7 +35,8 @@ namespace MangaMesh.Shared.Stores
                 LastSeenUtc = entity.LastSeenUtc,
                 Title = entity.Title,
                 ExternalMetadataSource = entity.ExternalMetadataSource,
-                ExteralMetadataMangaId = entity.ExteralMetadataMangaId
+                ExteralMetadataMangaId = entity.ExteralMetadataMangaId,
+                IsQuarantined = entity.IsQuarantined
             };
         }
 
@@ -55,7 +56,8 @@ namespace MangaMesh.Shared.Stores
                 LastSeenUtc = model.LastSeenUtc,
                 Title = model.Title,
                 ExternalMetadataSource = model.ExternalMetadataSource,
-                ExteralMetadataMangaId = model.ExteralMetadataMangaId
+                ExteralMetadataMangaId = model.ExteralMetadataMangaId,
+                IsQuarantined = model.IsQuarantined
             };
         }
 
@@ -68,6 +70,28 @@ namespace MangaMesh.Shared.Stores
         public async Task AddAsync(ManifestEntry entry)
         {
             await AddOrUpdateAsync(entry.ManifestHash, entry);
+        }
+
+        public async Task<IEnumerable<ManifestEntry>> GetAllAsync()
+        {
+            var entities = await Db.ManifestEntries
+                .Where(e => !e.IsQuarantined)
+                .ToListAsync();
+            return entities.Select(MapToModel);
+        }
+
+        public async Task<IEnumerable<ManifestEntry>> GetAllIncludingQuarantinedAsync()
+        {
+            var entities = await Db.ManifestEntries.ToListAsync();
+            return entities.Select(MapToModel);
+        }
+
+        public async Task SetQuarantineAsync(string hash, bool quarantined)
+        {
+            var entity = await Db.ManifestEntries.FindAsync(hash);
+            if (entity == null) return;
+            entity.IsQuarantined = quarantined;
+            await Db.SaveChangesAsync();
         }
 
         public async Task DeleteBySeriesIdAsync(string seriesId)

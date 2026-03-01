@@ -32,7 +32,23 @@ namespace MangaMesh.Shared.Stores
         public async Task<IEnumerable<ManifestEntry>> GetAllAsync()
         {
             await EnsureLoadedAsync();
+            return _entries.Values.Where(e => !e.IsQuarantined);
+        }
+
+        public async Task<IEnumerable<ManifestEntry>> GetAllIncludingQuarantinedAsync()
+        {
+            await EnsureLoadedAsync();
             return _entries.Values;
+        }
+
+        public async Task SetQuarantineAsync(string hash, bool quarantined)
+        {
+            await EnsureLoadedAsync();
+            if (!_entries.TryGetValue(hash, out var entry)) return;
+            entry.IsQuarantined = quarantined;
+            var fileName = Path.Combine(_dataDir, $"{hash}.json");
+            var json = JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(fileName, json);
         }
 
         public async Task<ManifestEntry?> GetAsync(string hash)

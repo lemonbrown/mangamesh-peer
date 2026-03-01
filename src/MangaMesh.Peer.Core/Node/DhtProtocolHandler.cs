@@ -1,4 +1,5 @@
 using MangaMesh.Peer.Core.Transport;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,8 +10,11 @@ namespace MangaMesh.Peer.Core.Node
     {
         public IDhtNode? DhtNode { get; set; }
 
-        public DhtProtocolHandler()
+        private readonly ILogger<DhtProtocolHandler> _logger;
+
+        public DhtProtocolHandler(ILogger<DhtProtocolHandler> logger)
         {
+            _logger = logger;
         }
 
         public ProtocolKind Kind => ProtocolKind.Dht;
@@ -32,7 +36,7 @@ namespace MangaMesh.Peer.Core.Node
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DHT Handler] Error: {ex.Message}");
+                _logger.LogWarning(ex, "Error handling DHT message from {Host}", from.Host);
             }
         }
     }
