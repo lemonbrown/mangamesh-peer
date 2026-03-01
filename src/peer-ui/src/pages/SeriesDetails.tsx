@@ -3,9 +3,20 @@ import { useParams, Link } from 'react-router-dom';
 import { getSeriesChapters, getSeriesDetails, getChapterDetails } from '../api/series';
 import { getSubscriptions, subscribe, unsubscribe } from '../api/subscriptions';
 import { getManifestFlagSummaries, loadLocallyFlagged, saveLocallyFlagged } from '../api/flags';
-import type { ChapterSummaryResponse, Subscription, SeriesDetailsResponse, ChapterManifest, FlagSummary } from '../types/api';
+import type { ChapterSummaryResponse, Subscription, SeriesDetailsResponse, ChapterManifest, FlagSummary, FlagCategory } from '../types/api';
 import LangFlag from '../components/LangFlag';
 import FlagModal from '../components/FlagModal';
+
+const FLAG_CATEGORY_LABELS: Record<FlagCategory, string> = {
+    quality_low:       'Low Quality',
+    page_order:        'Wrong Page Order',
+    missing_pages:     'Missing Pages',
+    wrong_chapter:     'Wrong Chapter',
+    duplicate:         'Duplicate',
+    nsfw:              'NSFW',
+    malicious_content: 'Malicious Content',
+    bad_title:         'Bad Title',
+};
 
 export default function SeriesDetails() {
     const { seriesId } = useParams<{ seriesId: string }>();
@@ -224,13 +235,24 @@ export default function SeriesDetails() {
                                                 <div key={mHash} className="group">
                                                     {/* Warning badge — shown when multiple peers have flagged this manifest */}
                                                     {isPeerFlagged && (
-                                                        <div className="mx-3 mt-2.5 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md">
-                                                            <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                        <div className="mx-3 mt-2.5 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md">
+                                                            <svg className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                                             </svg>
-                                                            <span className="text-xs font-medium text-amber-700">
-                                                                Multiple peers report issues with this chapter
-                                                            </span>
+                                                            <div>
+                                                                <span className="text-xs font-medium text-amber-700">
+                                                                    Multiple peers report issues with this chapter
+                                                                </span>
+                                                                {(flagWarnings[mHash]?.topCategories?.length ?? 0) > 0 && (
+                                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                                        {flagWarnings[mHash].topCategories.map(cat => (
+                                                                            <span key={cat} className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-medium rounded">
+                                                                                {FLAG_CATEGORY_LABELS[cat] ?? cat}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     )}
 

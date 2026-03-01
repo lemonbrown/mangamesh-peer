@@ -16,13 +16,15 @@ namespace MangaMesh.Peer.ClientApi.Controllers
     {
         private readonly IImportChapterService _importer;
         private readonly ISeriesRegistry _seriesRegistry;
+        private readonly ILogger<ImportController> _logger;
         private readonly string _inputDirectory = Path.Combine(AppContext.BaseDirectory, "input");
         private readonly string _importedChaptersFile;
 
-        public ImportController(IImportChapterService importer, ISeriesRegistry seriesRegistry)
+        public ImportController(IImportChapterService importer, ISeriesRegistry seriesRegistry, ILogger<ImportController> logger)
         {
             _importer = importer;
             _seriesRegistry = seriesRegistry;
+            _logger = logger;
             _importedChaptersFile = Path.Combine(_inputDirectory, "imported_chapters.json");
         }
 
@@ -55,8 +57,9 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR: CheckChapterExists failed: {ex.Message}");
-                // If the check fails (e.g. tracker down), we return false to let the main import flow try and report errors
+                _logger.LogWarning(ex, "CheckChapterExists failed for {Source}/{ExternalId} ch{Chapter}; defaulting to false",
+                    source, externalMangaId, chapterNumber);
+                // If the check fails (e.g. tracker down), let the main import flow try and report errors
                 return Ok(false);
             }
         }
@@ -65,13 +68,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         public async Task<ActionResult<ImportResultDto>> ImportChapter(
             [FromBody] ImportChapterRequestDto request)
         {
-            Console.WriteLine($"=== Import Chapter Request ===");
-            Console.WriteLine($"SeriesId: {request.SeriesId}");
-            Console.WriteLine($"ChapterNumber: {request.ChapterNumber}");
-            Console.WriteLine($"SourcePath: {request.SourcePath}");
-            Console.WriteLine($"Source: {request.Source}");
-            Console.WriteLine($"ExternalMangaId: {request.ExternalMangaId}");
-            Console.WriteLine($"==============================");
+            _logger.LogInformation("Import chapter request: series={SeriesId} ch={ChapterNumber} source={Source} externalId={ExternalMangaId} path={SourcePath}",
+                request.SeriesId, request.ChapterNumber, request.Source, request.ExternalMangaId, request.SourcePath);
 
             ImportResultDto result;
             try
@@ -84,10 +82,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             }
             catch (Exception ex)
             {
-                // General error
-                Console.WriteLine($"ERROR: Import failed: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
-                return BadRequest(ex.Message);
+                _logger.LogError(ex, "Import failed for series={SeriesId} ch={ChapterNumber}", request.SeriesId, request.ChapterNumber);
+                return BadRequest("Import failed. Check server logs for details.");
             }
 
             if (!Directory.Exists(_inputDirectory))
@@ -148,14 +144,25 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 
             var filePaths = new List<string>();
 
+            var normalizedBatchPath = Path.GetFullPath(batchPath);
+
             // Save all files
             foreach (var file in files)
             {
-                // We use FileName because webkitRelativePath is often passed here by browsers/clients
-                // expecting directory structure preservation.
-                // Sanitize the path to avoid directory traversal
-                var relativePath = file.FileName.Replace("..", "").TrimStart('/', '\\');
-                var fullPath = Path.Combine(batchPath, relativePath);
+                // Sanitize the path: normalize separators, strip leading slashes,
+                // and remove any ".." or "." components to prevent directory traversal.
+                var safeName = file.FileName.Replace('\\', '/').TrimStart('/');
+                safeName = string.Join('/',
+                    safeName.Split('/').Where(p => p != ".." && p != "." && p.Length > 0));
+
+                var fullPath = Path.GetFullPath(Path.Combine(normalizedBatchPath, safeName));
+
+                // Reject any path that escapes the batch directory
+                if (!fullPath.StartsWith(normalizedBatchPath + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest($"Invalid file path rejected: {file.FileName}");
+                }
 
                 var dir = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(dir))
@@ -181,8 +188,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                     }
                     catch (Exception ex)
                     {
-                        // Log or ignore extraction failures, treat as regular file
-                        Console.WriteLine($"Failed to extract {fullPath}: {ex.Message}");
+                        _logger.LogWarning(ex, "Failed to extract archive {File}; treating as regular file", fullPath);
                         filePaths.Add(fullPath);
                     }
                 }

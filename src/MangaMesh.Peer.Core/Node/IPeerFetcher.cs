@@ -10,6 +10,11 @@ namespace MangaMesh.Peer.Core.Node
 {
     public interface IPeerFetcher
     {
-        Task<ManifestHash> FetchManifestAsync(string manifestHash);
+        /// <summary>
+        /// Fetches a manifest (and its page blobs) ensuring it is available locally.
+        /// Returns the resolved hash and the node ID of the peer that delivered the content,
+        /// or null for DeliveredByNodeId if the manifest was already cached locally.
+        /// </summary>
+        Task<(ManifestHash Hash, string? DeliveredByNodeId)> FetchManifestAsync(string manifestHash);
     }
 }

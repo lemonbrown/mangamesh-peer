@@ -17,5 +17,7 @@ namespace MangaMesh.Shared.Data.Entities
         public string? Comment { get; set; }
         public DateTime SubmittedUtc { get; set; }
         public bool Dismissed { get; set; }
+        /// <summary>Optional: the NodeId of the peer reported as delivering bad content.</summary>
+        public string? ReportedNodeId { get; set; }
     }
 }

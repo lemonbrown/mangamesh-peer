@@ -1,4 +1,4 @@
-# MangaMesh.Peer
+# MangaMesh Peer
 
 The peer node implementation for the MangaMesh network. A peer is responsible for storing, sharing, and retrieving manga content across the decentralized network.
 

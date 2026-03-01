@@ -25,7 +25,8 @@ namespace MangaMesh.Shared.Stores
                 Categories = JsonSerializer.Serialize(flag.Categories),
                 Comment = flag.Comment,
                 SubmittedUtc = flag.SubmittedUtc,
-                Dismissed = flag.Dismissed
+                Dismissed = flag.Dismissed,
+                ReportedNodeId = flag.ReportedNodeId
             });
             await _db.SaveChangesAsync();
         }
@@ -109,7 +110,8 @@ namespace MangaMesh.Shared.Stores
                 JsonSerializer.Deserialize<List<string>>(e.Categories) ?? [],
                 e.Comment,
                 e.SubmittedUtc,
-                e.Dismissed
+                e.Dismissed,
+                e.ReportedNodeId
             );
 
         private static FlagSummaryData ComputeSummary(string manifestHash, IList<ChapterFlagEntity> flags)

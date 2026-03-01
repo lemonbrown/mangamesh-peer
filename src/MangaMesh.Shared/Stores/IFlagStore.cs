@@ -8,7 +8,8 @@ namespace MangaMesh.Shared.Stores
         List<string> Categories,
         string? Comment,
         DateTime SubmittedUtc,
-        bool Dismissed
+        bool Dismissed,
+        string? ReportedNodeId = null
     );
 
     public record FlagSummaryData(

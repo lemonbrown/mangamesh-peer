@@ -1,6 +1,6 @@
+# IDE & editor artifacts
 **/.classpath
 **/.dockerignore
-**/.env
 **/.git
 **/.gitignore
 **/.project
@@ -11,20 +11,48 @@
 **/*.*proj.user
 **/*.dbmdl
 **/*.jfm
+**/*.suo
+
+# Build & deploy manifests
 **/azds.yaml
-**/bin
 **/charts
-**/docker-compose*
-**/Dockerfile*
-**/node_modules
-**/npm-debug.log
-**/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+
+# .NET build artifacts
+**/bin
+**/obj
+**/TestResults
+
+# Node.js artifacts
+**/node_modules
+**/dist
+**/.vite
+**/npm-debug.log
+**/coverage
+
+# Docker files (not needed inside the build image)
+**/docker-compose*
+**/Dockerfile*
+
+# Local SQLite databases — runtime data, never bake into image
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Log and diagnostic files
+**/*.log
+**/*.log.*
+**/Logs
+**/logs
+
+# Scraper output
+**/reports
+
+# Secrets and environment files — must be injected at runtime
+**/.env
+**/.env.*
+
+# Documentation
 LICENSE
 README.md
-!**/.gitignore
-!.git/HEAD
-!.git/config
-!.git/packed-refs
-!.git/refs/heads/**

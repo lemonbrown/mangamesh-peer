@@ -63,7 +63,16 @@ var builder = new HostBuilder()
     .ConfigurePrimaryHttpMessageHandler(() =>
     {
         var handler = new HttpClientHandler();
-        handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        // Only bypass certificate validation when explicitly enabled (e.g. local dev with self-signed certs).
+        // Set MANGAMESH_SKIP_TLS_VERIFY=true in the environment to enable; never set this in production.
+        var skipTls = string.Equals(
+            Environment.GetEnvironmentVariable("MANGAMESH_SKIP_TLS_VERIFY"), "true",
+            StringComparison.OrdinalIgnoreCase);
+        if (skipTls)
+        {
+            Console.WriteLine("[WARN] Peer.Core - TLS certificate validation is DISABLED (MANGAMESH_SKIP_TLS_VERIFY=true). Do not use in production.");
+            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
         return handler;
     });
 
@@ -88,7 +97,7 @@ var builder = new HostBuilder()
     {
         var config = sp.GetRequiredService<IConfiguration>();
         var port = config.GetValue<int>("Dht:Port", 3001);
-        return new TcpTransport(listenPort: port);
+        return new TcpTransport(listenPort: port, sp.GetRequiredService<ILogger<TcpTransport>>());
     });
 
     // ======================================================
@@ -101,7 +110,7 @@ var builder = new HostBuilder()
     // ======================================================
     services.AddSingleton<IBootstrapNodeProvider, YamlBootstrapNodeProvider>();
 
-    // Protocol Handlers
+    // Protocol Handlers — ProtocolRouter and DhtProtocolHandler get loggers via DI
     services.AddSingleton<ProtocolRouter>();
     services.AddSingleton<DhtProtocolHandler>();
     services.AddSingleton<ContentProtocolHandler>();
@@ -110,7 +119,8 @@ var builder = new HostBuilder()
 
     services.AddSingleton<IDhtNode>(sp =>
     {
-        Console.WriteLine("[Program] Resolving IDhtNode...");
+        var startupLogger = sp.GetRequiredService<ILogger<DhtNode>>();
+        startupLogger.LogDebug("Resolving IDhtNode...");
         var identity = sp.GetRequiredService<INodeIdentity>();
         var transport = sp.GetRequiredService<ITransport>();
         var storage = sp.GetRequiredService<IDhtStorage>();
@@ -119,7 +129,6 @@ var builder = new HostBuilder()
         var tracker = sp.GetRequiredService<INodeAnnouncer>();
         var connectionInfo = sp.GetRequiredService<INodeConnectionInfoProvider>();
         var bootstrapProvider = sp.GetRequiredService<IBootstrapNodeProvider>();
-        var logger = sp.GetRequiredService<ILogger<DhtNode>>();
         var manifestStore = sp.GetService<IManifestStore>();
         var routingTable = new KBucketRoutingTable(identity.NodeId);
         var requestTracker = new DhtRequestTracker();
@@ -134,13 +143,13 @@ var builder = new HostBuilder()
 
         transport.OnMessage += router.RouteAsync;
 
-        var node = new DhtNode(identity, transport, storage, routingTable, bootstrapProvider, requestTracker, keypairService, keyStore, connectionInfo, logger);
+        var node = new DhtNode(identity, transport, storage, routingTable, bootstrapProvider, requestTracker, keypairService, keyStore, connectionInfo, startupLogger);
 
         // Circular dependency resolution for ContentProtocolHandler -> DhtNode (for request tracking/callbacks)
         contentHandler.DhtNode = node;
         dhtHandler.DhtNode = node;
 
-        Console.WriteLine("[Program] IDhtNode resolved.");
+        startupLogger.LogDebug("IDhtNode resolved");
         return node;
     });
 
@@ -170,11 +179,8 @@ var builder = new HostBuilder()
     //);
 });
 
-Console.WriteLine("Running node...");
-
-Console.WriteLine("Building host...");
 var host = builder.Build();
-Console.WriteLine("Host built.");
+var hostLogger = host.Services.GetRequiredService<ILogger<Program>>();
 
 using (var scope = host.Services.CreateScope())
 {
@@ -215,12 +221,12 @@ using (var scope = host.Services.CreateScope())
                         CreatedAt = DateTime.UtcNow
                     });
                     db.SaveChanges();
-                    Console.WriteLine("Migrated keys from JSON to SQLite.");
+                    hostLogger.LogInformation("Migrated keys from JSON to SQLite");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to migrate keys: {ex.Message}");
+                hostLogger.LogError(ex, "Failed to migrate keys from JSON");
             }
         }
     }
@@ -254,20 +260,20 @@ using (var scope = host.Services.CreateScope())
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to migrate manifest {file}: {ex.Message}");
+                    hostLogger.LogWarning(ex, "Failed to migrate manifest {File}", file);
                 }
             }
             if (files.Length > 0)
             {
                 db.SaveChanges();
-                Console.WriteLine($"Migrated {files.Length} manifests to SQLite.");
+                hostLogger.LogInformation("Migrated {Count} manifests to SQLite", files.Length);
             }
         }
     }
 }
 
-Console.WriteLine("Starting host...");
+hostLogger.LogInformation("Starting MangaMesh peer node");
 await host.RunAsync();
-Console.WriteLine("Host stopped.");
+hostLogger.LogInformation("MangaMesh peer node stopped");
 
 Console.ReadLine();

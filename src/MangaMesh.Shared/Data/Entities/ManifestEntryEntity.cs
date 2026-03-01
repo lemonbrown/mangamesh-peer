@@ -19,5 +19,6 @@ namespace MangaMesh.Shared.Data.Entities
         public string Title { get; set; } = default!;
         public string ExternalMetadataSource { get; set; } = default!;
         public string ExteralMetadataMangaId { get; set; } = default!;
+        public bool IsQuarantined { get; set; } = false;
     }
 }

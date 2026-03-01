@@ -135,7 +135,7 @@ namespace MangaMesh.Peer.Core.Manifests
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ClientDbContext>();
-            
+
             var exists = await context.Manifests.AnyAsync(m => m.Hash == hash.Value);
             if (exists) return;
 

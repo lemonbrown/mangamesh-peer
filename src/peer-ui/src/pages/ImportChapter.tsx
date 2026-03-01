@@ -99,6 +99,9 @@ export default function ImportChapter() {
     const [verificationError, setVerificationError] = useState<string | null>(null);
     const hasAutoVerified = useRef(false);
 
+    // Key registration pre-check (runs before any challenge)
+    const [keyCheckStatus, setKeyCheckStatus] = useState<'checking' | 'approved' | 'not-approved' | 'check-failed'>('checking');
+
     // Upload/Batch state
     const [uploadBatch, setUploadBatch] = useState<AnalyzedChapterDto[]>([]);
     const [isUploading, setIsUploading] = useState(false);
@@ -113,13 +116,29 @@ export default function ImportChapter() {
         try {
             const k = await getKeys();
             setKeys(k);
-            if (k.privateKeyBase64 && k.publicKeyBase64 && !hasAutoVerified.current) {
+
+            if (!k.publicKeyBase64) {
+                setKeyCheckStatus('check-failed');
+                return;
+            }
+
+            // Check index registration BEFORE issuing any challenge
+            const allowed = await checkKeyAllowed(k.publicKeyBase64);
+            if (!allowed) {
+                setKeyCheckStatus('not-approved');
+                return;
+            }
+
+            setKeyCheckStatus('approved');
+
+            if (k.privateKeyBase64 && !hasAutoVerified.current) {
                 setPrivateKeyInput(k.privateKeyBase64);
                 hasAutoVerified.current = true;
                 handleVerifySignature(k.publicKeyBase64, k.privateKeyBase64);
             }
         } catch (e) {
             console.error('Failed to load keys', e);
+            setKeyCheckStatus('check-failed');
         }
     }
 
@@ -394,13 +413,57 @@ export default function ImportChapter() {
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-6">Publish Chapter</h1>
 
-                {signatureStatus !== 'success' && signatureStatus !== 'not-registered' ? (
+                {keyCheckStatus === 'checking' ? (
+                    <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 flex items-center gap-3 text-gray-500">
+                        <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent shrink-0"></div>
+                        Checking publishing access...
+                    </div>
+                ) : keyCheckStatus === 'not-approved' ? (
+                    <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+                        <div className="flex gap-4 p-5 bg-amber-50 border border-amber-200 rounded-lg">
+                            <svg className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                            </svg>
+                            <div>
+                                <h2 className="text-base font-semibold text-amber-900 mb-1">Key Not Approved for Publishing</h2>
+                                <p className="text-sm text-amber-800">
+                                Publishing on the Origin MangaMesh network is currently restricted to approved signatures.
+                                Please see the <a href="https://discord.gg/mangamesh" className="underline font-bold" target="_blank" rel="noopener noreferrer">MangaMesh Discord</a> for information.
+                             </p>
+                                <div className="mt-4">
+                                    <p className="text-xs text-amber-700 mb-1">Your node's public key:</p>
+                                    <code className="block p-2 bg-amber-100 border border-amber-200 rounded text-[10px] break-all text-amber-900">
+                                        {keys?.publicKeyBase64 || 'Unknown'}
+                                    </code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : keyCheckStatus === 'check-failed' ? (
+                    <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+                        <div className="flex gap-4 p-5 bg-red-50 border border-red-200 rounded-lg">
+                            <svg className="w-6 h-6 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                                <h2 className="text-base font-semibold text-red-900 mb-1">Could Not Verify Publishing Access</h2>
+                                <p className="text-sm text-red-700 mb-3">Failed to check key registration with the index. Ensure the peer is running and connected.</p>
+                                <button
+                                    onClick={() => { setKeyCheckStatus('checking'); loadKeys(); }}
+                                    className="px-4 py-1.5 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition-colors"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : signatureStatus !== 'success' && signatureStatus !== 'not-registered' ? (
                     <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
                         <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-100">
                             <h2 className="text-lg font-semibold text-blue-900 mb-2">Verification Required</h2>
                             <p className="text-blue-800">
-                                Publishing on the MangaMesh network is currently restricted to approved signatures.
-                                Please apply the <a href="https://discord.gg/mangamesh" className="underline font-bold" target="_blank" rel="noopener noreferrer">MangaMesh Discord</a> for access.
+                                Publishing on the Origin MangaMesh network is currently restricted to approved signatures.
+                                Please see the <a href="https://discord.gg/mangamesh" className="underline font-bold" target="_blank" rel="noopener noreferrer">MangaMesh Discord</a> for information.
                             </p>
                         </div>
 
@@ -754,3 +817,4 @@ export default function ImportChapter() {
         </div>
     );
 }
+

@@ -1,0 +1,71 @@
+version: '3.8'
+
+# Standalone compose for a single MangaMesh peer node.
+# Runs the Peer ClientAPI + Peer UI.
+# The ClientAPI bootstraps into the public DHT network via bootstrap.mangamesh.net:4200.
+#
+# Usage:
+#   docker compose up -d
+#
+# Access the UI at: http://localhost:7124
+# Access the API at: http://localhost:8080
+
+services:
+
+  # --------------------
+  # Peer ClientAPI
+  # --------------------
+  peer:
+    build:
+      # Context is the parent (src/) directory so that the Dockerfile can
+      # reference files under mangamesh-peer/ using its expected paths.
+      context: ..
+      dockerfile: mangamesh-peer/src/MangaMesh.Peer.ClientApi/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # Public network
+      - TrackerUrl=https://network.mangamesh.net:3000
+      # DHT configuration
+      - Dht__Port=4200
+      - Dht__Bootstrap=true
+      - Dht__BootstrapNodes=bootstrap.mangamesh.net:4200
+      # Storage paths (inside container)
+      - BlobStore__RootPath=/app/input
+      - Database__Path=/app/data/mangamesh.db
+    ports:
+      - "8080:8080"   # HTTP API (accessible from host and peer-ui)
+      - "4200:4200"   # DHT port (must be reachable from the internet for P2P)
+    volumes:
+      - peer-data:/app/data     # SQLite database + keys
+      - peer-input:/app/input   # Blob store (chapters)
+    networks:
+      - peer-net
+    restart: unless-stopped
+
+  # --------------------
+  # Peer UI
+  # --------------------
+  peer-ui:
+    build:
+      context: src/peer-ui
+      dockerfile: Dockerfile
+    environment:
+      # Nginx uses these to proxy API calls from the browser
+      - PEER_CLIENT_API_URL=http://peer:8080
+      - PEER_METADATA_API_URL=https://network.mangamesh.net:3000
+    ports:
+      - "7124:80"   # UI accessible at http://localhost:7124
+    depends_on:
+      - peer
+    networks:
+      - peer-net
+    restart: unless-stopped
+
+networks:
+  peer-net:
+    driver: bridge
+
+volumes:
+  peer-data:
+  peer-input:

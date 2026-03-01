@@ -189,6 +189,8 @@ export interface FullChapterManifest {
     scanGroup: string;
     quality: string;
     files: ManifestFile[];
+    /** Node ID of the peer that delivered this manifest over P2P. Null if served from local cache. */
+    deliveredByNodeId?: string;
 }
 
 export interface ImportChapterResult {
@@ -225,6 +227,12 @@ export interface FlagRequest {
     manifestHash: string;
     categories: FlagCategory[];
     comment?: string;
+    reportedNodeId?: string;
+}
+
+export interface ManifestSeeder {
+    nodeId: string;
+    lastSeen: string;
 }
 
 export interface FlagSummary {
