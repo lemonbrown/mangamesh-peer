@@ -71,9 +71,4 @@ Key storage locations:
 
 ```bash
 # Unit tests
-dotnet test tests/MangaMesh.Peer.Tests/
-
-# Integration tests
-dotnet test tests/MangaMesh.IntegrationTests/MangaMesh.IntegrationTests.csproj
-```
-Integration tests spin up in-process nodes to verify system functionality (routing, transferring files, importing data) without external network dependencies.
+dotnet test test/MangaMesh.Peer.Tests/
