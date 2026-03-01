@@ -1,182 +1,71 @@
 # MangaMesh.Peer
 
-The peer node implementation for the MangaMesh decentralized content distribution network. A peer stores, serves, and retrieves content over a Kademlia DHT using cryptographically signed content manifests.
+The peer node implementation for the MangaMesh network. A peer is responsible for storing, sharing, and retrieving manga content across the decentralized network.
 
----
+## Functionality
 
-## Projects
+A MangaMesh peer acts as both a client and a server on the network, handling the following core functions:
 
-| Project | Type | Role |
+*   **Content Retrieval**: Locating and downloading manga chapters from other peers on the network.
+*   **Content Seeding**: Storing downloaded chapters locally up to configurable limits, and automatically serving those files to other peers who request them.
+*   **Content Publishing**: Importing local manga image files or ZIP archives, splitting them into shareable uniform chunks, and announcing their availability to the broader network.
+*   **Node Management**: Maintaining the node's cryptographic identity, tracking series subscriptions, and monitoring network connection states.
+
+## Components
+
+The peer is composed of three integrated projects:
+
+| Component | Role | Description |
 |---|---|---|
-| **MangaMesh.Peer.Core** | Console app | Standalone DHT node — runs headless, serves content over TCP |
-| **MangaMesh.Peer.ClientApi** | ASP.NET Core | REST API server — full peer node with HTTP endpoints for chapter management |
-| **mangamesh-peer-ui** | React SPA | Desktop client UI — browse, read, and publish content via the local peer node |
+| **MangaMesh.Peer.Core** | Network Layer | A standalone node that connects to the DHT, handles peer routing, and manages direct peer-to-peer data transfer over TCP. |
+| **MangaMesh.Peer.ClientApi** | Application Layer | An ASP.NET Core REST API that wraps the core node, exposing HTTP endpoints for chapter management, imports, and node configuration. |
+| **mangamesh-peer-ui** | User Interface | A React SPA providing a desktop-like web client for users to browse the network catalog, read chapters, and manage their node. |
 
-`ClientApi` builds on `Core` and adds the HTTP layer on top of the same DHT, storage, and import stack. The UI connects to `ClientApi` (and the Index API for metadata) over HTTP.
+## Running Locally
 
----
+For standard usage, you need to run both the API backend and the frontend UI.
 
-## How It Works
-
-A peer joins the network by bootstrapping into the DHT from a list of known nodes. It can import local content, which are split into content-addressed chunks, signed with an Ed25519 key, and announced to the tracker. Other peers discover chapters via the DHT or tracker and fetch content directly over TCP.
-
-**Import flow:**
-
-```
-Local files (directory or ZIP)
-  → split into chunks, stored by SHA-256 hash
-  → PageManifest + ChapterManifest built and signed
-  → announced to tracker and DHT
-  → discoverable and fetchable by any peer
-```
-
-**Fetch flow:**
-
-```
-ManifestHash (from tracker or DHT lookup)
-  → fetch ChapterManifest from peer
-  → fetch each PageManifest
-  → fetch and reassemble blob chunks
-  → display image
-```
-
----
-
-## Project Structure
-
-```
-MangaMesh.Peer/
-├── MangaMesh.Peer.Core/        Core DHT node (runs standalone or embedded)
-│   ├── Blob/                   Content-addressed chunk storage
-│   ├── Chapters/               Chapter import and publishing pipeline
-│   ├── Keys/                   Ed25519 identity and signing
-│   ├── Manifests/              Manifest storage (SQLite)
-│   ├── Node/                   DHT node, routing table, bootstrap
-│   ├── Tracker/                Tracker client (peer/manifest registration)
-│   ├── Transport/              TCP transport and protocol routing
-│   ├── config/bootstrap_nodes.yml
-│   └── Program.cs
-│
-├── MangaMesh.Peer.ClientApi/   REST API wrapper around Core
-│   ├── Controllers/            Import, blob, manifest, node, keys, series, storage, subscriptions
-│   ├── Services/               Import orchestration, challenge/auth
-│   └── Program.cs
-│
-└── mangamesh-peer-ui/          React SPA (Vite / Tailwind / Nginx)
-    ├── src/
-    │   ├── api/                HTTP client layer
-    │   ├── pages/              Route-level views
-    │   └── components/         Shared UI components
-    └── Dockerfile
-```
-
----
-
-## Configuration
-
-Backend options are set in `appsettings.json` or via environment variables (use `__` as the section separator, e.g. `Dht__Port`).
-
-| Section | Key | Default | Description |
-|---|---|---|---|
-| BlobStore | `RootPath` | `input` | Directory for stored content chunks |
-| BlobStore | `MaxStorageBytes` | `5368709120` | Storage cap (5 GB) |
-| ManifestStore | `RootPath` | `input/manifests` | Directory for manifest files |
-| Dht | `Port` | `3001` | TCP listen port |
-| Dht | `BootstrapNodesPath` | `config/bootstrap_nodes.yml` | Bootstrap node list |
-| Dht | `BootstrapNodes` | _(empty)_ | Inline bootstrap addresses (overrides YAML) |
-| — | `TrackerUrl` | — | Index tracker base URL (e.g. `http://localhost:7030`) |
-| — | `Database:Path` | `data/mangamesh.db` | SQLite database path |
-
----
-
-## Running
-
-### Local development
-
+**1. Start the Backend API**
 ```bash
-# REST API + full peer node (recommended)
 cd MangaMesh.Peer.ClientApi
 dotnet run
-# API at http://localhost:8080, Swagger at /swagger
-
-# Headless peer node only
-cd MangaMesh.Peer.Core
-dotnet run
+# The API will be available at http://localhost:8080
+# API documentation (Swagger) is available at http://localhost:8080/swagger
 ```
 
+**2. Start the Frontend UI**
 ```bash
-# UI dev server
 cd mangamesh-peer-ui
 npm install
 npm run dev
-# http://localhost:5173
+# The UI dev server will be available at http://localhost:5173
 ```
 
-The UI expects the peer API at `https://localhost:7124` and the Index API at `https://localhost:7030` by default. These can be changed in `vite.config.ts`.
+By default, the UI expects your local peer API at `https://localhost:7124` (or `http://localhost:8080`) and the central MangaMesh Index API at `https://localhost:7030`.
 
-### Docker
+## Docker Configuration
 
-From `src/`:
+The entire peer stack can be started using the central Docker Compose configuration from the `src/` directory:
 
 ```bash
 docker compose up peer-master peer.ui-master
 ```
 
-| Service | Port | Notes |
+| Service | Exposes | Description |
 |---|---|---|
-| `peer-master` | 8080 (API), 4200 (DHT) | Primary peer node |
-| `peer.ui-master` | 7124 | UI for `peer-master` |
-| `peer-slave` | 8081 (API), 3000 (DHT) | Second peer, bootstraps via `peer-master` |
-| `peer.ui-slave` | 7125 | UI for `peer-slave` |
-| `index.api` | 7030 | Tracker (required for registration) |
+| `peer-master` | 8080 (REST API), 4200 (TCP DHT) | The backend peer node |
+| `peer.ui-master` | 7124 (HTTP) | The frontend UI |
 
----
+## Configuration
 
-## REST API
+Backend behavior is configured via `appsettings.json` in the `ClientApi` project or through environment variables. 
 
-All endpoints are under `/api`. Swagger UI is available at `/swagger`.
+Key storage locations:
+*   **BlobStore**: The directory where content chunks are stored (`input` by default). The storage cap defaults to 5 GB.
+*   **ManifestStore**: The directory for chapter manifests (`input/manifests` by default).
+*   **Database Path**: The SQLite database tracking local node state and identities (`data/mangamesh.db` by default).
 
-| Area | Endpoints | Purpose |
-|---|---|---|
-| Import | `POST /import/chapter`, `POST /import/upload` | Import chapters from local path or ZIP upload |
-| Blobs | `GET /blob/{hash}`, `GET /file/{pageHash}` | Fetch content chunks or a reassembled page |
-| Manifests | `GET/POST /manifest` | Read and store chapter manifests |
-| Node | `GET /node/status` | Node ID, peer count, DHT state |
-| Keys | `/keys/*` | Generate keypair, challenge-response auth |
-| Series | `/series/*` | Browse and search series from the tracker |
-| Storage | `GET /storage` | Disk usage breakdown |
-| Subscriptions | `/subscriptions/*` | Manage series subscriptions |
-| Logs | `GET /logs` | Recent node activity logs |
-
-Upload limit: **500 MB**.
-
----
-
-## Peer UI
-
-The React SPA provides a full desktop client for operating a peer node.
-
-| Route | Purpose |
-|---|---|
-| `/` | Dashboard — node status, peer count, storage, subscription updates |
-| `/series` | Browse and search series |
-| `/series/:id` | Series detail and chapter list |
-| `/series/:id/read/:chapterId` | Content reader |
-| `/import` | Publish chapters with key signing |
-| `/subscriptions` | Manage subscriptions |
-| `/storage` | Storage usage |
-| `/keys` | Manage node keypair |
-| `/logs` | Node activity logs |
-
-In Docker, Nginx serves the built assets and proxies API calls. The three backend URLs are injected at container start via environment variables:
-
-| Variable | Default | Target |
-|---|---|---|
-| `PEER_CLIENT_API_URL` | `http://peer-master:8080` | Peer ClientApi |
-| `PEER_METADATA_API_URL` | `http://index.api:7030` | Index API (metadata, covers) |
-| `PEER_GATEWAY_URL` | `http://gateway:5170` | Gateway (optional) |
-
----
+*Note: Content imports via the API are currently capped at a file size limit of 500 MB.*
 
 ## Testing
 
@@ -187,17 +76,4 @@ dotnet test tests/MangaMesh.Peer.Tests/
 # Integration tests
 dotnet test tests/MangaMesh.IntegrationTests/MangaMesh.IntegrationTests.csproj
 ```
-
-Unit tests (MSTest + Moq) cover DHT routing, content protocol, key management, and chapter import. Integration tests spin up in-process nodes with no external dependencies (one E2E test requires a live tracker and is expected to fail without it).
-
----
-
-## Dependencies
-
-| Package | Purpose |
-|---|---|
-| `Microsoft.Extensions.Hosting` | Generic host, DI, configuration |
-| `Microsoft.EntityFrameworkCore.Sqlite` | SQLite storage for keys and manifests |
-| `NSec.Cryptography` | Ed25519 signing and key generation |
-| `YamlDotNet` | Bootstrap node YAML parsing |
-| `Swashbuckle.AspNetCore` | Swagger UI (ClientApi only) |
+Integration tests spin up in-process nodes to verify system functionality (routing, transferring files, importing data) without external network dependencies.
