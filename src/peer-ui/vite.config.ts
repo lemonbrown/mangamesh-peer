@@ -11,6 +11,8 @@ const gatewayUrl = process.env.PEER_GATEWAY_URL ?? 'http://localhost:5170'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,   // listen on 0.0.0.0 so Docker can expose the port
+    port: 5173,
     proxy: {
       '^/api/import': {
         target: clientApiUrl,
@@ -49,6 +51,16 @@ export default defineConfig({
         secure: false
       },
       '^/api/subscriptions': {
+        target: clientApiUrl,
+        changeOrigin: true,
+        secure: false
+      },
+      '^/api/broadcasts': {
+        target: clientApiUrl,
+        changeOrigin: true,
+        secure: false
+      },
+      '^/api/peer': {
         target: clientApiUrl,
         changeOrigin: true,
         secure: false

@@ -24,5 +24,10 @@ namespace MangaMesh.Peer.Core.Chapters
         public int FileCount { get; init; }
 
         public bool AlreadyExists { get; set; }
+
+        /// <summary>
+        /// Tracker-assigned series ID resolved during import
+        /// </summary>
+        public string SeriesId { get; init; } = "";
     }
 }

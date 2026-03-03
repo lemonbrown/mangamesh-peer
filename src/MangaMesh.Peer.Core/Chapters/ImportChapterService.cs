@@ -33,16 +33,12 @@ namespace MangaMesh.Peer.Core.Chapters
             var (hash, alreadyExists) = await _publisherService.PublishChapterAsync(
                 request, seriesId, seriesTitle, entries, totalSize, ct);
 
-            if (alreadyExists)
-            {
-                throw new InvalidOperationException("Manifest already exists");
-            }
-
             return new ImportChapterResult
             {
                 ManifestHash = hash,
                 FileCount = entries.Count,
-                AlreadyExists = alreadyExists
+                AlreadyExists = alreadyExists,
+                SeriesId = seriesId
             };
         }
 

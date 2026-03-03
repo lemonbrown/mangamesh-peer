@@ -9,6 +9,9 @@ import SeriesDetails from './pages/SeriesDetails';
 import Reader from './components/Reader';
 import Keys from './pages/Keys';
 import Logs from './pages/Logs';
+import Peer from './pages/Peer';
+import Broadcasts from './pages/Broadcasts';
+import BroadcastSeriesDetail from './pages/BroadcastSeriesDetail';
 
 function App() {
   return (
@@ -24,6 +27,9 @@ function App() {
           <Route path="storage" element={<Storage />} />
           <Route path="keys" element={<Keys />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="peer" element={<Peer />} />
+          <Route path="broadcasts" element={<Broadcasts />} />
+          <Route path="broadcasts/:seriesId" element={<BroadcastSeriesDetail />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -84,6 +84,22 @@ builder.Services.AddMangaMeshDhtNode(builder.Configuration);
 builder.Services.AddMangaMeshChapterServices();
 
 builder.Services.AddSingleton<INodeConnectionInfoProvider, ServerNodeConnectionInfoProvider>();
+builder.Services.AddSingleton<MangaMesh.Peer.ClientApi.Services.SeriesCoverStore>();
+
+builder.Services.AddHttpClient("MangaDex", client =>
+{
+    client.BaseAddress = new Uri("https://api.mangadex.org");
+    client.DefaultRequestHeaders.Add("User-Agent", "MangaMesh/1.0 (mangamesh@example.com)");
+});
+builder.Services.AddSingleton<IMangaMetadataProvider>(sp =>
+{
+    var factory = sp.GetRequiredService<IHttpClientFactory>();
+    var client = factory.CreateClient("MangaDex");
+    var username = builder.Configuration["MangaDex:Username"] ?? "";
+    var password = builder.Configuration["MangaDex:Password"] ?? "";
+    var logger = sp.GetRequiredService<ILogger<MangaDexMetadataProvider>>();
+    return new MangaDexMetadataProvider(client, username, password, logger);
+});
 
 builder.Services
         .AddScoped<ImportChapterService>()
@@ -138,6 +154,11 @@ builder.Services.AddTransient<INodeAnnouncer>(sp => (INodeAnnouncer)sp.GetRequir
 builder.Services.AddTransient<ISeriesRegistry>(sp => (ISeriesRegistry)sp.GetRequiredService<ITrackerClient>());
 builder.Services.AddTransient<IManifestAnnouncer>(sp => (IManifestAnnouncer)sp.GetRequiredService<ITrackerClient>());
 builder.Services.AddTransient<ITrackerChallengeClient>(sp => (ITrackerChallengeClient)sp.GetRequiredService<ITrackerClient>());
+
+builder.Services.AddHttpClient("PeerCatalog", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(4);
+});
 
 builder.Services.AddHttpClient("TrackerProxy", client =>
 {

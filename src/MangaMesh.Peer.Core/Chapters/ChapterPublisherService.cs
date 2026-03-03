@@ -43,6 +43,11 @@ namespace MangaMesh.Peer.Core.Chapters
         {
             var keyPair = await _keyStore.GetAsync();
 
+            // Derive public key from private key to ensure they match for signing
+            byte[] privateKeyBytes = Convert.FromBase64String(keyPair.PrivateKeyBase64);
+            var key = Key.Import(SignatureAlgorithm.Ed25519, privateKeyBytes, KeyBlobFormat.RawPrivateKey);
+            var derivedPublicKey = Convert.ToBase64String(key.PublicKey.Export(KeyBlobFormat.RawPublicKey));
+
             var title = request.DisplayName;
             if (!string.IsNullOrEmpty(seriesTitle) && !title.Contains(seriesTitle, StringComparison.OrdinalIgnoreCase))
             {
@@ -63,7 +68,7 @@ namespace MangaMesh.Peer.Core.Chapters
                 ScanGroup = request.ScanlatorId,
                 Title = title,
                 TotalSize = totalSize,
-                PublicKey = keyPair.PublicKeyBase64,
+                PublicKey = derivedPublicKey,
                 SignedBy = "self",
                 Quality = request.Quality,
                 Files = entries
@@ -79,8 +84,6 @@ namespace MangaMesh.Peer.Core.Chapters
             await _manifestStore.SaveAsync(hash, chapterManifest);
 
             // Sign manifest
-            byte[] privateKeyBytes = Convert.FromBase64String(keyPair.PrivateKeyBase64);
-            var key = Key.Import(SignatureAlgorithm.Ed25519, privateKeyBytes, KeyBlobFormat.RawPrivateKey);
             var signedManifest = _manifestSigning.SignManifest(chapterManifest, key);
 
             // Publish — challenge-response auth handled by TrackerPublisher

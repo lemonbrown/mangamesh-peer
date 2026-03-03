@@ -1,3 +1,11 @@
+# Stage 0: Dev — Vite dev server with HMR (source mounted as volume at runtime)
+FROM node:20-alpine AS dev
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm install
+EXPOSE 5173
+CMD ["npm", "run", "dev"]
+
 # Stage 1: Build React UI
 FROM node:20 AS client-build
 WORKDIR /app
