@@ -107,6 +107,80 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             return Ok();
         }
 
+        /// <summary>
+        /// Returns a summary of all locally-stored series (title, cover, chapter count).
+        /// Used by the Peer UI local library page.
+        /// </summary>
+        [HttpGet("series")]
+        public async Task<ActionResult> GetAllLocalSeries([FromServices] IManifestStore manifestStore)
+        {
+            var all = await manifestStore.GetAllWithDataAsync();
+            var seriesList = all
+                .GroupBy(x => x.Manifest.SeriesId)
+                .Select(g =>
+                {
+                    var seriesTitle = g.Select(x => x.Manifest.SeriesTitle).FirstOrDefault(t => !string.IsNullOrEmpty(t));
+                    var externalMangaId = g.Select(x => x.Manifest.ExternalMangaId).FirstOrDefault(id => !string.IsNullOrEmpty(id));
+                    var chapterCount = g.Select(x => x.Manifest.ChapterId).Distinct().Count();
+                    var chapterNumbers = g.Select(x => x.Manifest.ChapterNumber).Where(n => n > 0);
+                    var latestChapter = chapterNumbers.Any() ? (double?)chapterNumbers.Max() : null;
+                    var totalSizeBytes = g.Sum(x => x.Manifest.TotalSize);
+                    return new
+                    {
+                        seriesId = g.Key,
+                        seriesTitle,
+                        externalMangaId,
+                        chapterCount,
+                        latestChapter,
+                        totalSizeBytes
+                    };
+                })
+                .OrderBy(s => s.seriesTitle ?? s.seriesId)
+                .ToList();
+            return Ok(seriesList);
+        }
+
+        /// <summary>
+        /// Returns all locally-stored chapters and their manifests for a series.
+        /// Used by the Peer UI local library — no index/network calls required.
+        /// </summary>
+        [HttpGet("series/{seriesId}")]
+        public async Task<ActionResult> GetLocalSeries(string seriesId, [FromServices] IManifestStore manifestStore)
+        {
+            var all = await manifestStore.GetAllWithDataAsync();
+            var forSeries = all.Where(x => x.Manifest.SeriesId == seriesId).ToList();
+
+            var seriesTitle = forSeries.Select(x => x.Manifest.SeriesTitle).FirstOrDefault(t => !string.IsNullOrEmpty(t));
+            var externalMangaId = forSeries.Select(x => x.Manifest.ExternalMangaId).FirstOrDefault(id => !string.IsNullOrEmpty(id));
+
+            var chapters = forSeries
+                .GroupBy(x => x.Manifest.ChapterId)
+                .Select(g =>
+                {
+                    var first = g.First().Manifest;
+                    return new
+                    {
+                        chapterId = first.ChapterId,
+                        chapterNumber = first.ChapterNumber,
+                        volume = first.Volume,
+                        title = first.Title,
+                        uploadedAt = first.CreatedUtc,
+                        manifests = g.Select(x => new
+                        {
+                            manifestHash = x.Hash.Value,
+                            language = x.Manifest.Language,
+                            scanGroup = x.Manifest.ScanGroup,
+                            quality = x.Manifest.Quality,
+                            uploadedAt = x.Manifest.CreatedUtc
+                        }).ToList()
+                    };
+                })
+                .OrderBy(c => c.chapterNumber)
+                .ToList();
+
+            return Ok(new { seriesId, seriesTitle, externalMangaId, chapters });
+        }
+
         [HttpGet("blobs")]
         public ActionResult GetBlobs(
             [FromQuery] int offset = 0,

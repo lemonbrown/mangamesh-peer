@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net.Sockets;
+using MangaMesh.Peer.Core.Helpers;
 using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Peer.Core.Transport;
@@ -12,6 +13,7 @@ namespace MangaMesh.Peer.Core.Node
     {
         private readonly TimeSpan _reannounceInterval = TimeSpan.FromMinutes(30);
         private readonly TimeSpan _pingInterval = TimeSpan.FromMinutes(5);
+        private readonly TimeSpan _rediscoverInterval = TimeSpan.FromMinutes(2);
 
         private CancellationTokenSource? _maintenanceToken;
 
@@ -63,6 +65,7 @@ namespace MangaMesh.Peer.Core.Node
         {
             var lastReannounce = DateTime.UtcNow;
             var lastPing = DateTime.UtcNow;
+            var lastRediscover = DateTime.MinValue; // run immediately on first tick
 
             while (!token.IsCancellationRequested)
             {
@@ -90,6 +93,22 @@ namespace MangaMesh.Peer.Core.Node
                             await _dhtNode.PingAsync(entry);
                     }
                     lastPing = now;
+                }
+
+                // Periodically re-query known nodes (including bootstrap) for new peers.
+                // This fixes the race where peer2 bootstrapped before peer1 was registered
+                // with the bootstrap node, leaving peer2 with an empty routing table.
+                if (now - lastRediscover > _rediscoverInterval)
+                {
+                    try
+                    {
+                        await _dhtNode.FindNodeAsync(Crypto.RandomNodeId());
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Peer rediscovery FindNode failed.");
+                    }
+                    lastRediscover = now;
                 }
 
                 await AnnounceToIndexAsync();

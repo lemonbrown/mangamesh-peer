@@ -28,7 +28,7 @@ export default function Broadcasts() {
             <div className="flex items-start justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-1">Broadcasts</h1>
-                    <p className="text-gray-500">Series discovered from peers in the DHT — not necessarily tracked by the index.</p>
+                    <p className="text-gray-500">Series broadcasted by peers on the network</p>
                 </div>
                 <button
                     onClick={load}

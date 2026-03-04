@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     host: true,   // listen on 0.0.0.0 so Docker can expose the port
     port: 5173,
+    hmr: { host: 'localhost' },  // fix HMR WebSocket on Windows when host: true
     proxy: {
       '^/api/import': {
         target: clientApiUrl,
@@ -25,6 +26,11 @@ export default defineConfig({
         secure: false
       },
       '^/api/blob': {
+        target: clientApiUrl,
+        changeOrigin: true,
+        secure: false
+      },
+      '^/api/file': {
         target: clientApiUrl,
         changeOrigin: true,
         secure: false

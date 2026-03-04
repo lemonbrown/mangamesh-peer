@@ -11,7 +11,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
     [Route("api/[controller]")]
     public class NodeController : ControllerBase
     {
-        private readonly INodeIdentityService _nodeIdentity;
+        private readonly INodeIdentity _nodeIdentity;
+        private readonly INodeIdentityService _nodeIdentityService;
         private readonly ISeriesRegistry _trackerClient;
         private readonly IManifestStore _manifestStore;
         private readonly IConfiguration _configuration;
@@ -19,7 +20,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         private readonly IPeerLocator _peerLocator;
 
         public NodeController(
-            INodeIdentityService nodeIdentity,
+            INodeIdentity nodeIdentity,
+            INodeIdentityService nodeIdentityService,
             ISeriesRegistry trackerClient,
             IManifestStore manifestStore,
             IConfiguration configuration,
@@ -27,6 +29,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             IPeerLocator peerLocator)
         {
             _nodeIdentity = nodeIdentity;
+            _nodeIdentityService = nodeIdentityService;
             _trackerClient = trackerClient;
             _manifestStore = manifestStore;
             _configuration = configuration;
@@ -37,16 +40,15 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         [HttpGet("status")]
         public async Task<IResult> GetStatus()
         {
-
             var stats = await _trackerClient.GetStatsAsync();
             var (_, seededCount) = await _manifestStore.GetSetHashAsync();
             var trackerUrl = _configuration["TrackerUrl"] ?? "https://localhost:7030";
 
             return Results.Ok(new
             {
-                _nodeIdentity.NodeId,
-                _nodeIdentity.IsConnected,
-                LastPingUtc = _nodeIdentity.LastPingUtc,
+                NodeId = Convert.ToHexString(_nodeIdentity.NodeId).ToLowerInvariant(),
+                _nodeIdentityService.IsConnected,
+                LastPingUtc = _nodeIdentityService.LastPingUtc,
                 PeerCount = stats.NodeCount,
                 SeededManifests = seededCount,
                 TrackerUrl = trackerUrl

@@ -1,8 +1,10 @@
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Node;
 using MangaMesh.Peer.Core.Tracker;
+using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
@@ -163,6 +165,80 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             }).ToList();
 
             return Results.Ok(broadcasts);
+        }
+
+        [HttpGet("peek")]
+        public async Task<IResult> PeekChapter(string nodeId, string manifestHash, CancellationToken cancellationToken)
+        {
+            // Resolve host:port from DHT routing table
+            byte[] nodeIdBytes;
+            try { nodeIdBytes = Convert.FromHexString(nodeId); }
+            catch { return Results.BadRequest("Invalid nodeId"); }
+
+            var address = _dhtNode.RoutingTable.GetAddressForNode(nodeIdBytes);
+            if (address == null || address.HttpApiPort == 0)
+                return Results.NotFound("Node not found in routing table or has no HTTP API port");
+
+            var baseUrl = $"http://{address.Host}:{address.HttpApiPort}";
+            var client = _httpClientFactory.CreateClient("PeerCatalog");
+
+            // Fetch manifest from peer
+            ChapterManifest? manifest;
+            try
+            {
+                using var manifestResponse = await client.GetAsync($"{baseUrl}/api/peer/manifest/{Uri.EscapeDataString(manifestHash)}", cancellationToken);
+                if (!manifestResponse.IsSuccessStatusCode)
+                    return Results.NotFound("Manifest not found on peer");
+                manifest = await manifestResponse.Content.ReadFromJsonAsync<ChapterManifest>(cancellationToken: cancellationToken);
+                if (manifest == null || manifest.Files.Count == 0)
+                    return Results.NotFound("Manifest is empty");
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Failed to fetch manifest: {ex.Message}");
+            }
+
+            // Pick a random page
+            var rng = new Random();
+            var file = manifest.Files[rng.Next(manifest.Files.Count)];
+
+            // Fetch PageManifest blob from peer
+            PageManifest? pageManifest;
+            try
+            {
+                using var pageResponse = await client.GetAsync($"{baseUrl}/api/blob/{Uri.EscapeDataString(file.Hash)}", cancellationToken);
+                if (!pageResponse.IsSuccessStatusCode)
+                    return Results.NotFound("Page manifest blob not found on peer");
+                pageManifest = await pageResponse.Content.ReadFromJsonAsync<PageManifest>(cancellationToken: cancellationToken);
+                if (pageManifest == null || pageManifest.Chunks.Count == 0)
+                    return Results.NotFound("Page manifest is empty");
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Failed to fetch page manifest: {ex.Message}");
+            }
+
+            // Assemble chunks into full image (ephemeral — not stored locally)
+            var fileData = new byte[pageManifest.FileSize];
+            int offset = 0;
+            try
+            {
+                foreach (var chunkHash in pageManifest.Chunks)
+                {
+                    using var chunkResponse = await client.GetAsync($"{baseUrl}/api/blob/{Uri.EscapeDataString(chunkHash)}", cancellationToken);
+                    if (!chunkResponse.IsSuccessStatusCode)
+                        return Results.NotFound($"Chunk {chunkHash} not found on peer");
+                    var chunkBytes = await chunkResponse.Content.ReadAsByteArrayAsync(cancellationToken);
+                    chunkBytes.CopyTo(fileData, offset);
+                    offset += chunkBytes.Length;
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Failed to fetch chunk: {ex.Message}");
+            }
+
+            return Results.Bytes(fileData, pageManifest.MimeType);
         }
 
         private async Task TryFetchCoverFromPeerAsync(string host, int port, string seriesId)

@@ -11,6 +11,8 @@ namespace MangaMesh.Shared.Models
         public int SchemaVersion { get; init; } = 2;
         public string ChapterId { get; init; } = default!;
         public string SeriesId { get; init; } = default!;
+        public string? SeriesTitle { get; init; }
+        public string? ExternalMangaId { get; init; }
         public string Title { get; init; } = default!;
         public string? Volume { get; init; }
         public double ChapterNumber { get; init; }

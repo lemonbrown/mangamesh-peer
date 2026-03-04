@@ -1,7 +1,6 @@
 ﻿using MangaMesh.Peer.ClientApi.Models;
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Manifests;
-using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,15 +14,15 @@ namespace MangaMesh.Peer.ClientApi.Controllers
     public class ImportController : ControllerBase
     {
         private readonly IImportChapterService _importer;
-        private readonly ISeriesRegistry _seriesRegistry;
+        private readonly IManifestStore _manifestStore;
         private readonly ILogger<ImportController> _logger;
         private readonly string _inputDirectory = Path.Combine(AppContext.BaseDirectory, "input");
         private readonly string _importedChaptersFile;
 
-        public ImportController(IImportChapterService importer, ISeriesRegistry seriesRegistry, ILogger<ImportController> logger)
+        public ImportController(IImportChapterService importer, IManifestStore manifestStore, ILogger<ImportController> logger)
         {
             _importer = importer;
-            _seriesRegistry = seriesRegistry;
+            _manifestStore = manifestStore;
             _logger = logger;
             _importedChaptersFile = Path.Combine(_inputDirectory, "imported_chapters.json");
         }
@@ -49,19 +48,11 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             [FromQuery] string externalMangaId,
             [FromQuery] double chapterNumber)
         {
-            try
-            {
-                var (seriesId, _) = await _seriesRegistry.RegisterSeriesAsync(source, externalMangaId);
-                var chapters = await _seriesRegistry.GetSeriesChaptersAsync(seriesId);
-                return Ok(chapters.Any(c => c.ChapterNumber == chapterNumber));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "CheckChapterExists failed for {Source}/{ExternalId} ch{Chapter}; defaulting to false",
-                    source, externalMangaId, chapterNumber);
-                // If the check fails (e.g. tracker down), let the main import flow try and report errors
-                return Ok(false);
-            }
+            var all = await _manifestStore.GetAllWithDataAsync();
+            var exists = all.Any(m =>
+                m.Manifest.ChapterNumber == chapterNumber &&
+                string.Equals(m.Manifest.ExternalMangaId, externalMangaId, StringComparison.OrdinalIgnoreCase));
+            return Ok(exists);
         }
 
         [HttpPost("chapter")]

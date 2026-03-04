@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getSeriesChapters, getSeriesDetails, getChapterDetails } from '../api/series';
-import { getSubscriptions, subscribe, unsubscribe } from '../api/subscriptions';
+import { getLocalSeriesData } from '../api/storage';
+import type { LocalChapter, LocalChapterManifest } from '../api/storage';
 import { getManifestFlagSummaries, loadLocallyFlagged, saveLocallyFlagged } from '../api/flags';
-import type { ChapterSummaryResponse, Subscription, SeriesDetailsResponse, ChapterManifest, FlagSummary, FlagCategory } from '../types/api';
+import type { FlagSummary, FlagCategory } from '../types/api';
 import LangFlag from '../components/LangFlag';
 import FlagModal from '../components/FlagModal';
 
@@ -20,12 +20,10 @@ const FLAG_CATEGORY_LABELS: Record<FlagCategory, string> = {
 
 export default function SeriesDetails() {
     const { seriesId } = useParams<{ seriesId: string }>();
-    const [chapters, setChapters] = useState<ChapterSummaryResponse[]>([]);
-    const [chapterManifests, setChapterManifests] = useState<Record<string, ChapterManifest[]>>({});
-    const [seriesInfo, setSeriesInfo] = useState<SeriesDetailsResponse | null>(null);
-    const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [chapters, setChapters] = useState<LocalChapter[]>([]);
+    const [seriesTitle, setSeriesTitle] = useState<string | null>(null);
+    const [externalMangaId, setExternalMangaId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [manifestsLoading, setManifestsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Flag state
@@ -37,66 +35,19 @@ export default function SeriesDetails() {
         async function load() {
             if (!seriesId) return;
             try {
-                const [chapterData, subs, details] = await Promise.all([
-                    getSeriesChapters(seriesId),
-                    getSubscriptions(),
-                    getSeriesDetails(seriesId)
-                ]);
-                const sortedChapters = (chapterData || []).sort((a, b) => {
-                    return (b.chapterNumber || 0) - (a.chapterNumber || 0);
-                });
-                setChapters(sortedChapters);
-                setSeriesInfo(details);
-                const sub = subs.find(s => s.seriesId === seriesId);
-                setSubscription(sub || null);
+                const seriesData = await getLocalSeriesData(seriesId);
 
-                // Fetch manifests for each chapter
-                if (chapterData.length > 0) {
-                    setManifestsLoading(true);
+                const sorted = [...seriesData.chapters].sort((a, b) => b.chapterNumber - a.chapterNumber);
+                setChapters(sorted);
+                setSeriesTitle(seriesData.seriesTitle ?? null);
+                setExternalMangaId(seriesData.externalMangaId ?? null);
 
-                    const detailsResults = await Promise.allSettled(
-                        chapterData.map(ch => getChapterDetails(seriesId, ch.chapterId))
-                    );
-
-                    const manifestsMap: Record<string, ChapterManifest[]> = {};
-                    const titleUpdates: Record<string, string> = {};
-                    const allHashes: string[] = [];
-
-                    detailsResults.forEach((result, index) => {
-                        if (result.status === 'fulfilled') {
-                            const chapterId = chapterData[index].chapterId;
-                            const val = result.value;
-                            const manifests: ChapterManifest[] = val.manifests || (val as any).Manifests || [];
-                            manifestsMap[chapterId] = manifests;
-                            manifests.forEach(m => {
-                                const h = m.manifestHash || (m as any).ManifestHash;
-                                if (h) allHashes.push(h);
-                            });
-
-                            const title = val.title || (val as any).Title;
-                            if (title) {
-                                titleUpdates[chapterId] = title;
-                            }
-                        }
-                    });
-
-                    setChapterManifests(manifestsMap);
-
-                    if (Object.keys(titleUpdates).length > 0) {
-                        setChapters(prev => prev.map(ch => ({
-                            ...ch,
-                            title: titleUpdates[ch.chapterId] || ch.title
-                        })));
-                    }
-
-                    // Fetch flag summaries (silently fails if backend not ready)
-                    if (allHashes.length > 0) {
-                        getManifestFlagSummaries(allHashes).then(summaries => {
-                            setFlagWarnings(summaries);
-                        });
-                    }
-
-                    setManifestsLoading(false);
+                // Fetch flag summaries from index (silently fails if offline)
+                const allHashes = seriesData.chapters.flatMap(ch => ch.manifests.map(m => m.manifestHash));
+                if (allHashes.length > 0) {
+                    getManifestFlagSummaries(allHashes).then(summaries => {
+                        setFlagWarnings(summaries);
+                    }).catch(() => {});
                 }
             } catch (e) {
                 setError('Failed to load series data');
@@ -106,24 +57,6 @@ export default function SeriesDetails() {
         }
         load();
     }, [seriesId]);
-
-    async function handleSubscribeToggle() {
-        if (!seriesId) return;
-        try {
-            if (subscription) {
-                if (confirm('Are you sure you want to unsubscribe?')) {
-                    await unsubscribe(seriesId);
-                    setSubscription(null);
-                }
-            } else {
-                await subscribe(seriesId);
-                const subs = await getSubscriptions();
-                setSubscription(subs.find(s => s.seriesId === seriesId) || null);
-            }
-        } catch (e) {
-            alert('Failed to update subscription');
-        }
-    }
 
     function handleFlagSubmitted(manifestHash: string) {
         setLocallyFlagged(prev => {
@@ -139,48 +72,31 @@ export default function SeriesDetails() {
 
     return (
         <div className="space-y-6">
-            {/* Series header — cover + metadata */}
+            {/* Series header */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="flex gap-5 p-5">
-                    {/* Cover art */}
-                    <div className="shrink-0 w-28 rounded overflow-hidden bg-gray-100 self-start relative flex items-center justify-center" style={{ minHeight: '10rem' }}>
-                        <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                        {seriesInfo?.externalMangaId && (
+                    <div className="shrink-0 w-28 rounded overflow-hidden bg-gray-100 self-start flex items-center justify-center" style={{ minHeight: '10rem' }}>
+                        {externalMangaId ? (
                             <img
-                                src={`/covers/${seriesInfo.externalMangaId}.card.webp`}
-                                alt={seriesInfo.title}
-                                className="absolute inset-0 w-full h-full object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                src={`/covers/${externalMangaId}.card.webp`}
+                                alt={seriesTitle ?? seriesId}
+                                className="w-full h-full object-cover"
                             />
+                        ) : (
+                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
                         )}
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{seriesInfo?.title || seriesId}</h1>
-                        {seriesInfo?.author && (
-                            <div className="text-sm text-gray-500 mt-1">{seriesInfo.author}</div>
-                        )}
+                        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{seriesTitle ?? seriesId}</h1>
                         <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-500">
                             <span><span className="font-semibold text-gray-700">{chapters.length}</span> chapters</span>
-                            {seriesInfo?.seedCount !== undefined && (
-                                <span><span className="font-semibold text-green-600">{seriesInfo.seedCount}</span> seeds</span>
-                            )}
                         </div>
                         <div className="flex items-center gap-3 mt-4">
-                            <button
-                                onClick={handleSubscribeToggle}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${subscription
-                                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                                    }`}
-                            >
-                                {subscription ? 'Subscribed' : 'Subscribe'}
-                            </button>
                             <Link to="/series" className="text-blue-600 hover:underline text-sm">
-                                ← Series
+                                ← Library
                             </Link>
                         </div>
                     </div>
@@ -192,7 +108,7 @@ export default function SeriesDetails() {
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">No chapters found.</div>
                 ) : (
                     chapters.map((chapter) => {
-                        const manifests = chapterManifests[chapter.chapterId] || [];
+                        const manifests: LocalChapterManifest[] = chapter.manifests;
 
                         return (
                             <div key={chapter.chapterId} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -205,28 +121,24 @@ export default function SeriesDetails() {
                                 </div>
 
                                 <div className="divide-y divide-gray-50">
-                                    {manifestsLoading && manifests.length === 0 ? (
-                                        <div className="p-4 text-sm text-gray-400 italic">
-                                            Loading available versions...
-                                        </div>
-                                    ) : manifests.length === 0 ? (
+                                    {manifests.length === 0 ? (
                                         <div className="p-4 text-sm text-gray-400 italic">
                                             No versions available.
                                         </div>
                                     ) : (
                                         manifests.map((manifest) => {
-                                            const mHash = manifest.manifestHash || (manifest as any).ManifestHash;
-                                            const mLang = manifest.language || (manifest as any).Language;
-                                            const mQuality = manifest.quality || (manifest as any).Quality;
-                                            const mScanGroup = manifest.scanGroup || (manifest as any).ScanGroup;
-                                            let mIsVerified = manifest.isVerified !== undefined ? manifest.isVerified : (manifest as any).IsVerified;
+                                            const mHash = manifest.manifestHash;
+                                            const mLang = manifest.language;
+                                            const mQuality = manifest.quality;
+                                            const mScanGroup = manifest.scanGroup;
+                                            let mIsVerified = false;
 
                                             // Temporary Mock: Mark 'opscan' as verified for demonstration
                                             if (mScanGroup?.toLowerCase().includes('opscan')) {
                                                 mIsVerified = true;
                                             }
 
-                                            const mUploadedAt = manifest.uploadedAt || (manifest as any).UploadedAt;
+                                            const mUploadedAt = manifest.uploadedAt;
                                             const chapterLabel = `Chapter ${chapter.chapterNumber}${chapter.title ? ` — ${chapter.title}` : ''} · ${mScanGroup || mLang}`;
                                             const isPeerFlagged = flagWarnings[mHash]?.hasMultiplePeerFlags === true;
                                             const isLocalFlagged = locallyFlagged.has(mHash);

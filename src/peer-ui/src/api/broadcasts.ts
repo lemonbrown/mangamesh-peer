@@ -26,6 +26,17 @@ export interface PeerBroadcast {
     series: BroadcastSeries[];
 }
 
+export async function peekChapter(nodeId: string, manifestHash: string): Promise<string> {
+    const params = new URLSearchParams({ nodeId, manifestHash });
+    const response = await apiFetch(`/api/broadcasts/peek?${params}`);
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Peek failed (HTTP ${response.status}): ${text}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+}
+
 export async function getBroadcasts(): Promise<PeerBroadcast[]> {
     const response = await apiFetch('/api/broadcasts');
     if (!response.ok) {

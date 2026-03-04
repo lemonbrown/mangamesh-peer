@@ -3,23 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 import classNames from 'classnames';
 import NodeStatusIndicator from './NodeStatusIndicator';
 
-function useIsNetworkSection() {
-    const location = useLocation();
-    return (
-        location.pathname.startsWith('/series') ||
-        location.pathname.startsWith('/subscriptions')
-    );
-}
-
-function useIsPeerSection() {
-    const location = useLocation();
-    return (
-        location.pathname.startsWith('/peer') ||
-        location.pathname.startsWith('/import') ||
-        location.pathname.startsWith('/broadcasts')
-    );
-}
-
 const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => {
     const location = useLocation();
     const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
@@ -64,8 +47,6 @@ const SidebarLink = ({ to, children, onClick }: { to: string; children: React.Re
 export default function Nav() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const sidebarRef = useRef<HTMLDivElement>(null);
-    const isNetworkSection = useIsNetworkSection();
-    const isPeerSection = useIsPeerSection();
 
     // Close sidebar when clicking outside
     useEffect(() => {
@@ -97,65 +78,24 @@ export default function Nav() {
                         MangaMesh
                     </div>
                     <div className="flex items-center gap-1">
-                        {/* Peer group */}
-                        <div className={classNames(
-                            'flex items-center rounded-lg transition-colors',
-                            isPeerSection && 'bg-gradient-to-r from-blue-50 to-sky-100 pr-0.5'
-                        )}>
-                            <NavLink to="/peer">
-                                {/* Desktop/computer icon */}
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                                Peer
-                            </NavLink>
-                            {isPeerSection && (
-                                <>
-                                    <div className="w-px h-4 bg-gray-300 flex-shrink-0 mx-0.5" aria-hidden />
-                                    <NavLink to="/broadcasts">
-                                        {/* Broadcast / signal icon */}
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                                        </svg>
-                                        Broadcasts
-                                    </NavLink>
-                                    <div className="w-px h-4 bg-gray-300 flex-shrink-0 mx-0.5" aria-hidden />
-                                    <NavLink to="/import">
-                                        {/* Upload icon */}
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                        </svg>
-                                        Import
-                                    </NavLink>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Network group */}
-                        <div className={classNames(
-                            'flex items-center rounded-lg transition-colors',
-                            isNetworkSection && 'bg-gradient-to-r from-emerald-50 to-teal-100 pr-0.5'
-                        )}>
-                            <NavLink to="/series">
-                                {/* Globe/network icon */}
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Network
-                            </NavLink>
-                            {isNetworkSection && (
-                                <>
-                                    <div className="w-px h-4 bg-gray-300 flex-shrink-0 mx-0.5" aria-hidden />
-                                    <NavLink to="/subscriptions">
-                                        {/* Bookmark icon */}
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                        </svg>
-                                        Subscriptions
-                                    </NavLink>
-                                </>
-                            )}
-                        </div>
+                        <NavLink to="/peer">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Peer
+                        </NavLink>
+                        <NavLink to="/broadcasts">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                            </svg>
+                            Broadcasts
+                        </NavLink>
+                        <NavLink to="/import">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            Import
+                        </NavLink>
                     </div>
                 </div>
 

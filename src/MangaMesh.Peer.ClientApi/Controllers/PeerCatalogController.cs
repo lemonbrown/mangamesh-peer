@@ -1,6 +1,8 @@
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Manifests;
+using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace MangaMesh.Peer.ClientApi.Controllers
 {
@@ -18,6 +20,15 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         {
             _manifestStore = manifestStore;
             _coverStore = coverStore;
+        }
+
+        [HttpGet("manifest/{manifestHash}")]
+        public async Task<IResult> GetManifest(string manifestHash)
+        {
+            var hash = new ManifestHash(manifestHash);
+            var manifest = await _manifestStore.GetAsync(hash);
+            if (manifest == null) return Results.NotFound();
+            return Results.Json(manifest);
         }
 
         [HttpGet("catalog")]

@@ -30,7 +30,7 @@ export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
         seriesTitle: string | null;
         externalMangaId: string | null;
         peerIds: Set<string>;
-        chapterMap: Map<number, Map<string, ChapterRelease>>;
+        chapterMap: Map<number, Map<string, ChapterRelease>>; // inner key: manifestHash
     }>();
 
     for (const peer of peers) {
@@ -48,8 +48,8 @@ export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
                     entry.chapterMap.set(ch.chapterNumber, new Map());
                 }
                 const releases = entry.chapterMap.get(ch.chapterNumber)!;
-                if (!releases.has(ch.chapterId)) {
-                    releases.set(ch.chapterId, {
+                if (!releases.has(ch.manifestHash)) {
+                    releases.set(ch.manifestHash, {
                         chapterId: ch.chapterId,
                         manifestHash: ch.manifestHash,
                         nodeIds: ch.nodeId ? [ch.nodeId] : [],
@@ -60,7 +60,7 @@ export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
                         createdUtc: ch.createdUtc,
                     });
                 } else if (ch.nodeId) {
-                    const existing = releases.get(ch.chapterId)!;
+                    const existing = releases.get(ch.manifestHash)!;
                     if (!existing.nodeIds.includes(ch.nodeId)) existing.nodeIds.push(ch.nodeId);
                 }
             }

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Json;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace MangaMesh.Peer.Core.Tracker
@@ -81,35 +80,11 @@ namespace MangaMesh.Peer.Core.Tracker
              Shared.Models.AnnounceManifestRequest announcement,
              CancellationToken ct = default)
         {
-            var nodeId = string.IsNullOrEmpty(announcement.NodeId)
-                ? Guid.NewGuid().ToString("N")
-                : announcement.NodeId;
+            var toSend = string.IsNullOrEmpty(announcement.NodeId)
+                ? announcement with { NodeId = Guid.NewGuid().ToString("N") }
+                : announcement;
 
-            dynamic content = new
-            {
-                NodeId = nodeId,
-                ManifestHash = announcement.ManifestHash,
-                announcement.SeriesId,
-                announcement.ChapterId,
-                announcement.ChapterNumber,
-                announcement.Volume,
-                announcement.Source,
-                announcement.ExternalMangaId,
-                announcement.Title,
-                announcement.Language,
-                announcement.ScanGroup,
-                announcement.TotalSize,
-                announcement.CreatedUtc,
-                announcement.AnnouncedAt,
-                announcement.Signature,
-                announcement.PublicKey,
-                announcement.SignedBy,
-                announcement.Files
-            };
-
-            var httpContent = JsonContent.Create(content);
-
-            var response = await _httpClient.PostAsync("/api/announce/manifest", httpContent);
+            var response = await _httpClient.PostAsJsonAsync("/api/announce/manifest", toSend, ct);
 
             if (response.IsSuccessStatusCode)
                 return;

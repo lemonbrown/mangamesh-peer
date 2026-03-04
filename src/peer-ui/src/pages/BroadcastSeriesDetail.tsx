@@ -1,12 +1,117 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { getBroadcasts } from '../api/broadcasts';
+import { getBroadcasts, peekChapter } from '../api/broadcasts';
 import { groupBySeries, formatDate } from '../utils/broadcastUtils';
-import type { SeriesEntry } from '../utils/broadcastUtils';
+import type { SeriesEntry, ChapterRelease } from '../utils/broadcastUtils';
 import LangFlag from '../components/LangFlag';
 
 function chFmt(n: number) {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function NodeLink({ nodeId, seriesId, release }: { nodeId: string; seriesId: string; release: ChapterRelease }) {
+    const to = `/series/${seriesId}/read/${release.chapterId}?manifest=${release.manifestHash}&nodeId=${encodeURIComponent(nodeId)}`;
+    return (
+        <Link
+            to={to}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 text-blue-700 font-mono text-[11px] transition-colors group"
+        >
+            <svg className="w-3 h-3 shrink-0 text-blue-400 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {nodeId}
+        </Link>
+    );
+}
+
+interface PeekState {
+    objectUrl: string;
+    manifestHash: string;
+}
+
+function PeekModal({ peek, onClose }: { peek: PeekState; onClose: () => void }) {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            URL.revokeObjectURL(peek.objectUrl);
+        };
+    }, [peek.objectUrl, onClose]);
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+            onClick={onClose}
+        >
+            <div
+                className="relative max-w-2xl max-h-[90vh] flex flex-col items-center"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between w-full mb-2 px-1">
+                    <span className="text-white/60 text-xs font-mono">{peek.manifestHash.slice(0, 16)}… (random page peek)</span>
+                    <button
+                        onClick={onClose}
+                        className="text-white/70 hover:text-white text-sm px-2 py-0.5 rounded hover:bg-white/10"
+                    >
+                        ✕ Close
+                    </button>
+                </div>
+                <img
+                    src={peek.objectUrl}
+                    alt="Peek page"
+                    className="max-h-[80vh] max-w-full object-contain rounded shadow-2xl"
+                />
+            </div>
+        </div>
+    );
+}
+
+function PeekButton({ release }: { release: ChapterRelease }) {
+    const [loading, setLoading] = useState(false);
+    const [peek, setPeek] = useState<PeekState | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const nodeId = release.nodeIds[0];
+    if (!nodeId) return null;
+
+    const handlePeek = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const objectUrl = await peekChapter(nodeId, release.manifestHash);
+            setPeek({ objectUrl, manifestHash: release.manifestHash });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Peek failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <>
+            <button
+                onClick={handlePeek}
+                disabled={loading}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-700 text-[11px] transition-colors disabled:opacity-50"
+            >
+                {loading ? (
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                ) : (
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                )}
+                Peek
+            </button>
+            {error && <span className="text-[10px] text-red-500">{error}</span>}
+            {peek && <PeekModal peek={peek} onClose={() => setPeek(null)} />}
+        </>
+    );
 }
 
 export default function BroadcastSeriesDetail() {
@@ -14,7 +119,6 @@ export default function BroadcastSeriesDetail() {
     const location = useLocation();
 
     const [entry, setEntry] = useState<SeriesEntry | null>(location.state as SeriesEntry | null);
-    const [expandedRelease, setExpandedRelease] = useState<string | null>(null);
     const [loading, setLoading] = useState(!entry);
     const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +150,6 @@ export default function BroadcastSeriesDetail() {
             {/* Series header */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="flex gap-5 p-5">
-                    {/* Cover art */}
                     <div className="shrink-0 w-28 rounded overflow-hidden bg-gray-100 self-start relative flex items-center justify-center" style={{ minHeight: '10rem' }}>
                         <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -61,7 +164,6 @@ export default function BroadcastSeriesDetail() {
                         )}
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                         <h1 className="text-2xl font-bold text-gray-900 leading-tight">{title}</h1>
                         <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-500">
@@ -84,77 +186,58 @@ export default function BroadcastSeriesDetail() {
                 </div>
             </div>
 
-            {/* Chapters */}
-            <div className="space-y-4">
-                {!entry || entry.chapters.length === 0 ? (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
-                        {!entry ? 'Series not found in current DHT broadcasts.' : 'No chapters found.'}
-                    </div>
-                ) : (
-                    entry.chapters.map((ch) => (
-                        <div key={ch.chapterNumber} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                                <h3 className="text-sm font-bold text-gray-700">
-                                    Chapter {chFmt(ch.chapterNumber)}
-                                    {ch.displayTitle && ch.displayTitle !== `Chapter ${ch.chapterNumber}` && (
-                                        <span className="ml-2 font-normal text-gray-500">- {ch.displayTitle}</span>
-                                    )}
-                                </h3>
+            {/* Chapter list */}
+            {!entry || entry.chapters.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
+                    {!entry ? 'Series not found in current DHT broadcasts.' : 'No chapters found.'}
+                </div>
+            ) : (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
+                    {entry.chapters.map((ch) => (
+                        <div key={ch.chapterNumber} className="p-4">
+                            {/* Chapter heading */}
+                            <div className="flex items-baseline gap-2 mb-3">
+                                <span className="text-sm font-bold text-gray-800">
+                                    Ch. {chFmt(ch.chapterNumber)}
+                                </span>
+                                {ch.displayTitle && ch.displayTitle !== `Chapter ${ch.chapterNumber}` && (
+                                    <span className="text-sm text-gray-500 truncate">{ch.displayTitle}</span>
+                                )}
                             </div>
 
-                            <div className="divide-y divide-gray-50">
+                            {/* Releases */}
+                            <div className="space-y-3 pl-3 border-l-2 border-gray-100">
                                 {ch.releases.map((r) => (
-                                    <div key={r.chapterId}>
-                                        <div
-                                            className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
-                                            onClick={() => setExpandedRelease(expandedRelease === r.chapterId ? null : r.chapterId)}
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                                                        <LangFlag code={r.language} /> {r.language}
-                                                    </span>
-                                                    {r.quality && r.quality !== 'Unknown' && (
-                                                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
-                                                            {r.quality}
-                                                        </span>
-                                                    )}
-                                                    {r.scanGroup && (
-                                                        <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
-                                                            {r.scanGroup}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-1 font-mono truncate">
-                                                    {r.createdUtc && <span className="font-sans text-gray-500 shrink-0">{formatDate(r.createdUtc)}</span>}
-                                                    {r.manifestHash && <span className="shrink-0" title={r.manifestHash}>manifest: {r.manifestHash.slice(0, 12)}…</span>}
-                                                </div>
-                                            </div>
-                                            <svg className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${expandedRelease === r.chapterId ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </div>
-                                        {expandedRelease === r.chapterId && (
-                                            <div className="px-4 pb-3 bg-gray-50 border-t border-gray-100">
-                                                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Broadcasting nodes</p>
-                                                {(r.nodeIds ?? []).length === 0 ? (
-                                                    <p className="text-xs text-gray-400">No nodes known.</p>
-                                                ) : (
-                                                    <ul className="space-y-0.5">
-                                                        {(r.nodeIds ?? []).map(nid => (
-                                                            <li key={nid} className="font-mono text-[11px] text-gray-600" title={nid}>{nid}</li>
-                                                        ))}
-                                                    </ul>
-                                                )}
-                                            </div>
+                                    <div key={r.manifestHash} className="flex flex-wrap items-center gap-2">
+                                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                            <LangFlag code={r.language} /> {r.language}
+                                        </span>
+                                        {r.quality && r.quality !== 'Unknown' && (
+                                            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
+                                                {r.quality}
+                                            </span>
+                                        )}
+                                        {r.scanGroup && (
+                                            <span className="text-sm font-medium text-gray-700">{r.scanGroup}</span>
+                                        )}
+                                        {r.createdUtc && (
+                                            <span className="text-[11px] text-gray-400">{formatDate(r.createdUtc)}</span>
+                                        )}
+                                        {r.nodeIds.length > 0 && <PeekButton release={r} />}
+                                        {r.nodeIds.length === 0 ? (
+                                            <span className="text-[11px] text-gray-400 italic">No nodes known.</span>
+                                        ) : (
+                                            r.nodeIds.map(nid => (
+                                                <NodeLink key={nid} nodeId={nid} seriesId={seriesId!} release={r} />
+                                            ))
                                         )}
                                     </div>
                                 ))}
                             </div>
                         </div>
-                    ))
-                )}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
