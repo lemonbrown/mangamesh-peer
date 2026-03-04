@@ -3,13 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { getBroadcasts } from '../api/broadcasts';
 import { groupBySeries, formatDate } from '../utils/broadcastUtils';
 import type { SeriesEntry } from '../utils/broadcastUtils';
-import { langCountryCode } from '../utils/language';
-
-function LangFlag({ code }: { code: string }) {
-    const country = langCountryCode(code);
-    if (!country) return <span className="text-xs text-gray-400">{code}</span>;
-    return <span className={`fi fi-${country} rounded-sm text-base`} title={code} />;
-}
+import LangFlag from '../components/LangFlag';
 
 function chFmt(n: number) {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -20,9 +14,9 @@ export default function BroadcastSeriesDetail() {
     const location = useLocation();
 
     const [entry, setEntry] = useState<SeriesEntry | null>(location.state as SeriesEntry | null);
+    const [expandedRelease, setExpandedRelease] = useState<string | null>(null);
     const [loading, setLoading] = useState(!entry);
     const [error, setError] = useState<string | null>(null);
-    const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -31,7 +25,6 @@ export default function BroadcastSeriesDetail() {
             const all = groupBySeries(await getBroadcasts());
             const found = all.find(s => s.seriesId === seriesId) ?? null;
             setEntry(found);
-            setExpanded(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to fetch broadcasts.');
         } finally {
@@ -43,130 +36,125 @@ export default function BroadcastSeriesDetail() {
         if (!entry) load();
     }, [entry, load]);
 
-    function toggle(chapterNumber: number) {
-        setExpanded(prev => {
-            const next = new Set(prev);
-            next.has(chapterNumber) ? next.delete(chapterNumber) : next.add(chapterNumber);
-            return next;
-        });
-    }
+    if (loading) return <div className="p-8 text-gray-500">Loading...</div>;
+    if (error) return <div className="p-8 text-red-500">{error}</div>;
 
     const title = entry?.seriesTitle ?? entry?.seriesId ?? seriesId;
 
     return (
-        <div className="space-y-6 pb-12">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4 min-w-0">
-                    {entry?.coverUrl && (
-                        <img
-                            src={entry.coverUrl}
-                            alt=""
-                            className="w-20 h-28 object-cover rounded-lg shadow-sm shrink-0 bg-gray-100"
-                        />
-                    )}
-                    <div className="min-w-0">
-                        <Link to="/broadcasts" className="text-xs text-gray-400 hover:text-blue-500 transition-colors mb-1 inline-block">
-                            ← Broadcasts
-                        </Link>
-                        <h1 className="text-3xl font-bold text-gray-900 truncate">{title}</h1>
-                        {entry && (
-                            <p className="text-gray-500 text-sm mt-0.5">
-                                {entry.chapters.length} {entry.chapters.length === 1 ? 'chapter' : 'chapters'} &middot; {entry.peerCount} {entry.peerCount === 1 ? 'peer' : 'peers'}
-                            </p>
+        <div className="space-y-6">
+            {/* Series header */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="flex gap-5 p-5">
+                    {/* Cover art */}
+                    <div className="shrink-0 w-28 rounded overflow-hidden bg-gray-100 self-start relative flex items-center justify-center" style={{ minHeight: '10rem' }}>
+                        <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        {entry?.externalMangaId && (
+                            <img
+                                src={`/covers/${entry.externalMangaId}.card.webp`}
+                                alt={title ?? ''}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
                         )}
                     </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-2xl font-bold text-gray-900 leading-tight">{title}</h1>
+                        <div className="flex flex-wrap gap-3 mt-3 text-sm text-gray-500">
+                            {entry && <span><span className="font-semibold text-gray-700">{entry.chapters.length}</span> chapters</span>}
+                            {entry && <span><span className="font-semibold text-green-600">{entry.peerCount}</span> {entry.peerCount === 1 ? 'peer' : 'peers'}</span>}
+                        </div>
+                        <div className="flex items-center gap-3 mt-4">
+                            <button
+                                onClick={load}
+                                disabled={loading}
+                                className="px-4 py-2 rounded-md text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            >
+                                Refresh
+                            </button>
+                            <Link to="/broadcasts" className="text-blue-600 hover:underline text-sm">
+                                ← Broadcasts
+                            </Link>
+                        </div>
+                    </div>
                 </div>
-                <button
-                    onClick={load}
-                    disabled={loading}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50 shrink-0"
-                >
-                    <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Refresh
-                </button>
             </div>
 
-            {error && (
-                <div className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</div>
-            )}
+            {/* Chapters */}
+            <div className="space-y-4">
+                {!entry || entry.chapters.length === 0 ? (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
+                        {!entry ? 'Series not found in current DHT broadcasts.' : 'No chapters found.'}
+                    </div>
+                ) : (
+                    entry.chapters.map((ch) => (
+                        <div key={ch.chapterNumber} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-gray-700">
+                                    Chapter {chFmt(ch.chapterNumber)}
+                                    {ch.displayTitle && ch.displayTitle !== `Chapter ${ch.chapterNumber}` && (
+                                        <span className="ml-2 font-normal text-gray-500">- {ch.displayTitle}</span>
+                                    )}
+                                </h3>
+                            </div>
 
-            {loading ? (
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="px-5 py-3 border-b border-gray-50 animate-pulse flex items-center gap-3">
-                            <div className="h-3 bg-gray-200 rounded w-10" />
-                            <div className="h-3 bg-gray-100 rounded flex-1" />
-                        </div>
-                    ))}
-                </div>
-            ) : !entry ? (
-                <div className="text-gray-500 italic p-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    Series not found in current DHT broadcasts.
-                </div>
-            ) : (
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="divide-y divide-gray-50">
-                        {entry.chapters.map(ch => {
-                            const isOpen = expanded.has(ch.chapterNumber);
-                            const uniqueLangs = [...new Set(ch.releases.map(r => r.language).filter(Boolean))];
-
-                            return (
-                                <div key={ch.chapterNumber}>
-                                    <button
-                                        onClick={() => toggle(ch.chapterNumber)}
-                                        className="w-full px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                                    >
-                                        <span className="text-xs font-mono font-semibold text-blue-500 w-10 shrink-0">
-                                            {chFmt(ch.chapterNumber)}
-                                        </span>
-                                        <span className="text-sm text-gray-800 truncate flex-1">{ch.displayTitle}</span>
-                                        <span className="flex items-center gap-1.5 shrink-0">
-                                            {uniqueLangs.map(lang => <LangFlag key={lang} code={lang} />)}
-                                            {ch.releases.length > 1 && (
-                                                <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                                                    {ch.releases.length}
-                                                </span>
-                                            )}
-                                            <svg
-                                                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                                                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </span>
-                                    </button>
-
-                                    {isOpen && (
-                                        <div className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
-                                            {ch.releases.map(r => (
-                                                <div key={r.chapterId} className="px-5 py-2.5 pl-14 flex items-center gap-2">
-                                                    <LangFlag code={r.language} />
-                                                    <span className="text-sm text-gray-700 flex-1 truncate">
-                                                        {r.scanGroup || <span className="italic text-gray-400">Unknown group</span>}
+                            <div className="divide-y divide-gray-50">
+                                {ch.releases.map((r) => (
+                                    <div key={r.chapterId}>
+                                        <div
+                                            className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
+                                            onClick={() => setExpandedRelease(expandedRelease === r.chapterId ? null : r.chapterId)}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                        <LangFlag code={r.language} /> {r.language}
                                                     </span>
                                                     {r.quality && r.quality !== 'Unknown' && (
-                                                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
+                                                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
                                                             {r.quality}
                                                         </span>
                                                     )}
-                                                    {r.createdUtc && (
-                                                        <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">
-                                                            {formatDate(r.createdUtc)}
+                                                    {r.scanGroup && (
+                                                        <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                                                            {r.scanGroup}
                                                         </span>
                                                     )}
                                                 </div>
-                                            ))}
+                                                <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-1 font-mono truncate">
+                                                    {r.createdUtc && <span className="font-sans text-gray-500 shrink-0">{formatDate(r.createdUtc)}</span>}
+                                                    {r.manifestHash && <span className="shrink-0" title={r.manifestHash}>manifest: {r.manifestHash.slice(0, 12)}…</span>}
+                                                </div>
+                                            </div>
+                                            <svg className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${expandedRelease === r.chapterId ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
                                         </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+                                        {expandedRelease === r.chapterId && (
+                                            <div className="px-4 pb-3 bg-gray-50 border-t border-gray-100">
+                                                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Broadcasting nodes</p>
+                                                {(r.nodeIds ?? []).length === 0 ? (
+                                                    <p className="text-xs text-gray-400">No nodes known.</p>
+                                                ) : (
+                                                    <ul className="space-y-0.5">
+                                                        {(r.nodeIds ?? []).map(nid => (
+                                                            <li key={nid} className="font-mono text-[11px] text-gray-600" title={nid}>{nid}</li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
         </div>
     );
 }

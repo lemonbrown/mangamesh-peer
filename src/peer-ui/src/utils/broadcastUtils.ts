@@ -2,6 +2,8 @@ import type { PeerBroadcast } from '../api/broadcasts';
 
 export interface ChapterRelease {
     chapterId: string;
+    manifestHash: string;
+    nodeIds: string[];
     title: string;
     scanGroup: string;
     language: string;
@@ -18,7 +20,7 @@ export interface AggregatedChapter {
 export interface SeriesEntry {
     seriesId: string;
     seriesTitle: string | null;
-    coverUrl: string | null;
+    externalMangaId: string | null;
     peerCount: number;
     chapters: AggregatedChapter[];
 }
@@ -26,7 +28,7 @@ export interface SeriesEntry {
 export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
     const seriesMap = new Map<string, {
         seriesTitle: string | null;
-        coverUrl: string | null;
+        externalMangaId: string | null;
         peerIds: Set<string>;
         chapterMap: Map<number, Map<string, ChapterRelease>>;
     }>();
@@ -34,11 +36,11 @@ export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
     for (const peer of peers) {
         for (const s of peer.series) {
             if (!seriesMap.has(s.seriesId)) {
-                seriesMap.set(s.seriesId, { seriesTitle: s.seriesTitle, coverUrl: s.coverUrl ?? null, peerIds: new Set(), chapterMap: new Map() });
+                seriesMap.set(s.seriesId, { seriesTitle: s.seriesTitle, externalMangaId: s.externalMangaId ?? null, peerIds: new Set(), chapterMap: new Map() });
             }
             const entry = seriesMap.get(s.seriesId)!;
             if (!entry.seriesTitle && s.seriesTitle) entry.seriesTitle = s.seriesTitle;
-            if (!entry.coverUrl && s.coverUrl) entry.coverUrl = s.coverUrl;
+            if (!entry.externalMangaId && s.externalMangaId) entry.externalMangaId = s.externalMangaId;
             entry.peerIds.add(peer.nodeId);
 
             for (const ch of s.chapters) {
@@ -49,22 +51,27 @@ export function groupBySeries(peers: PeerBroadcast[]): SeriesEntry[] {
                 if (!releases.has(ch.chapterId)) {
                     releases.set(ch.chapterId, {
                         chapterId: ch.chapterId,
+                        manifestHash: ch.manifestHash,
+                        nodeIds: ch.nodeId ? [ch.nodeId] : [],
                         title: ch.title,
                         scanGroup: ch.scanGroup,
                         language: ch.language,
                         quality: ch.quality,
                         createdUtc: ch.createdUtc,
                     });
+                } else if (ch.nodeId) {
+                    const existing = releases.get(ch.chapterId)!;
+                    if (!existing.nodeIds.includes(ch.nodeId)) existing.nodeIds.push(ch.nodeId);
                 }
             }
         }
     }
 
     return Array.from(seriesMap.entries())
-        .map(([seriesId, { seriesTitle, coverUrl, peerIds, chapterMap }]) => ({
+        .map(([seriesId, { seriesTitle, externalMangaId, peerIds, chapterMap }]) => ({
             seriesId,
             seriesTitle,
-            coverUrl,
+            externalMangaId,
             peerCount: peerIds.size,
             chapters: Array.from(chapterMap.entries())
                 .map(([chapterNumber, releases]) => {

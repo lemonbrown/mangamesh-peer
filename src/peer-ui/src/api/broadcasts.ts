@@ -2,6 +2,8 @@ import { apiFetch } from './client';
 
 export interface BroadcastChapter {
     chapterId: string;
+    manifestHash: string;
+    nodeId: string;
     title: string;
     chapterNumber: number;
     language: string;
@@ -13,7 +15,7 @@ export interface BroadcastChapter {
 export interface BroadcastSeries {
     seriesId: string;
     seriesTitle: string | null;
-    coverUrl: string | null;
+    externalMangaId: string | null;
     chapters: BroadcastChapter[];
 }
 
@@ -37,9 +39,11 @@ export async function getBroadcasts(): Promise<PeerBroadcast[]> {
         series: (p.series ?? p.Series ?? []).map((s: any) => ({
             seriesId: s.seriesId ?? s.SeriesId,
             seriesTitle: s.seriesTitle ?? s.SeriesTitle ?? null,
-            coverUrl: s.coverUrl ?? s.CoverUrl ?? null,
+            externalMangaId: s.externalMangaId ?? s.ExternalMangaId ?? null,
             chapters: (s.chapters ?? s.Chapters ?? []).map((c: any) => ({
                 chapterId: c.chapterId ?? c.ChapterId,
+                manifestHash: c.manifestHash ?? c.ManifestHash ?? '',
+                nodeId: c.nodeId ?? c.NodeId ?? '',
                 title: c.title ?? c.Title ?? '',
                 chapterNumber: c.chapterNumber ?? c.ChapterNumber ?? 0,
                 language: c.language ?? c.Language ?? '',

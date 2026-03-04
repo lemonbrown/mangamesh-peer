@@ -3,13 +3,6 @@ import { Link } from 'react-router-dom';
 import { getBroadcasts } from '../api/broadcasts';
 import { groupBySeries } from '../utils/broadcastUtils';
 import type { SeriesEntry } from '../utils/broadcastUtils';
-import { langCountryCode } from '../utils/language';
-
-function LangFlag({ code }: { code: string }) {
-    const country = langCountryCode(code);
-    if (!country) return <span className="text-xs text-gray-400">{code}</span>;
-    return <span className={`fi fi-${country} rounded-sm text-base`} title={code} />;
-}
 
 export default function Broadcasts() {
     const [series, setSeries] = useState<SeriesEntry[]>([]);
@@ -54,16 +47,9 @@ export default function Broadcasts() {
             )}
 
             {loading ? (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {[1, 2, 3, 4, 5].map(i => (
-                        <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 animate-pulse flex items-center gap-4">
-                            <div className="w-12 h-16 bg-gray-200 rounded shrink-0" />
-                            <div className="flex-1 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-48" />
-                                <div className="h-3 bg-gray-100 rounded w-24" />
-                            </div>
-                            <div className="h-6 bg-gray-100 rounded w-16" />
-                        </div>
+                        <div key={i} className="aspect-[2/3] bg-gray-100 rounded-xl animate-pulse" />
                     ))}
                 </div>
             ) : series.length === 0 ? (
@@ -71,53 +57,44 @@ export default function Broadcasts() {
                     No peers discovered in DHT yet. Try again after the node bootstraps.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-3">
-                    {series.map(entry => {
-                        const latestCh = entry.chapters.at(-1);
-                        const allLangs = [...new Set(entry.chapters.flatMap(ch => ch.releases.map(r => r.language)).filter(Boolean))];
-
-                        return (
-                            <Link
-                                key={entry.seriesId}
-                                to={`/broadcasts/${entry.seriesId}`}
-                                state={entry}
-                                className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 flex items-center gap-4 hover:border-blue-200 hover:bg-blue-50/30 transition-colors group"
-                            >
-                                {entry.coverUrl ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-8 gap-x-4">
+                    {series.map(entry => (
+                        <Link
+                            key={entry.seriesId}
+                            to={`/broadcasts/${entry.seriesId}`}
+                            state={entry}
+                            className="group flex flex-col bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1 h-full"
+                        >
+                            <div className="relative aspect-[2/3] bg-gray-100 overflow-hidden">
+                                {entry.externalMangaId && (
                                     <img
-                                        src={entry.coverUrl}
-                                        alt=""
-                                        className="w-12 h-16 object-cover rounded shrink-0 bg-gray-100"
+                                        src={`/covers/${entry.externalMangaId}.card.webp`}
+                                        alt={entry.seriesTitle ?? entry.seriesId}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        loading="lazy"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                     />
-                                ) : (
-                                    <div className="w-12 h-16 rounded shrink-0 bg-gray-100 flex items-center justify-center text-gray-300">
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                    </div>
                                 )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-gray-900 group-hover:text-blue-700 truncate transition-colors">
-                                        {entry.seriesTitle ?? entry.seriesId}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        {entry.chapters.length} {entry.chapters.length === 1 ? 'chapter' : 'chapters'} &middot; {entry.peerCount} {entry.peerCount === 1 ? 'peer' : 'peers'}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    {allLangs.map(lang => <LangFlag key={lang} code={lang} />)}
-                                    {latestCh && (
-                                        <span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
-                                            Ch. {Number.isInteger(latestCh.chapterNumber) ? latestCh.chapterNumber : latestCh.chapterNumber.toFixed(1)}
-                                        </span>
-                                    )}
-                                    <svg className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                <div className="absolute inset-0 flex items-center justify-center text-gray-300 -z-0">
+                                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                     </svg>
                                 </div>
-                            </Link>
-                        );
-                    })}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">
+                                    <span className="text-white text-sm font-medium">View Series</span>
+                                </div>
+                            </div>
+                            <div className="p-3 flex flex-col flex-1">
+                                <h3 className="font-semibold text-gray-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-2 mb-2">
+                                    {entry.seriesTitle ?? entry.seriesId}
+                                </h3>
+                                <div className="mt-auto flex items-center justify-between text-xs text-gray-500">
+                                    <span className="text-green-600 font-medium">{entry.peerCount} {entry.peerCount === 1 ? 'peer' : 'peers'}</span>
+                                    <span>{entry.chapters.length} ch</span>
+                                </div>
+                            </div>
+                        </Link>
+                    ))}
                 </div>
             )}
         </div>

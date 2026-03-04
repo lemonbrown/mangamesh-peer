@@ -35,6 +35,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                         .Select(x => new
                         {
                             ChapterId = x.Manifest.ChapterId,
+                            ManifestHash = x.Hash.Value,
                             Title = x.Manifest.Title,
                             ChapterNumber = x.Manifest.ChapterNumber,
                             Language = x.Manifest.Language,

@@ -70,6 +70,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '^/covers': {
+        target: metadataApiUrl,
+        changeOrigin: true,
+        secure: false
+      },
       '^/gateway': {
         target: gatewayUrl,
         changeOrigin: true,

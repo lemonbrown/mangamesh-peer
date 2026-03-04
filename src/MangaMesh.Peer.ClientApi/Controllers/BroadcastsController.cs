@@ -27,7 +27,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 
         private record PeerCatalog(string NodeId, string Host, int HttpApiPort, List<PeerSeriesEntry> Series);
         private record PeerSeriesEntry(string SeriesId, bool HasCover, List<PeerChapterEntry> Chapters);
-        private record PeerChapterEntry(string ChapterId, string Title, double ChapterNumber, string Language, string ScanGroup, string Quality, DateTime CreatedUtc);
+        private record PeerChapterEntry(string ChapterId, string ManifestHash, string Title, double ChapterNumber, string Language, string ScanGroup, string Quality, DateTime CreatedUtc);
 
         [HttpGet]
         public async Task<IResult> GetBroadcasts(CancellationToken cancellationToken)
@@ -76,6 +76,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                                 {
                                     var chapterId = ch.TryGetProperty("chapterId", out var cid) ? cid.GetString()
                                         : ch.TryGetProperty("ChapterId", out var Cid) ? Cid.GetString() : null;
+                                    var manifestHash = ch.TryGetProperty("manifestHash", out var mh) ? mh.GetString()
+                                        : ch.TryGetProperty("ManifestHash", out var Mh) ? Mh.GetString() : null;
                                     var title = ch.TryGetProperty("title", out var t) ? t.GetString()
                                         : ch.TryGetProperty("Title", out var T) ? T.GetString() : null;
                                     var chapterNumber = ch.TryGetProperty("chapterNumber", out var cn) ? cn.GetDouble()
@@ -90,7 +92,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                                         : ch.TryGetProperty("CreatedUtc", out var Cu) ? Cu.GetDateTime() : DateTime.MinValue;
 
                                     if (chapterId != null)
-                                        chapters.Add(new PeerChapterEntry(chapterId, title ?? "", chapterNumber, language ?? "", scanGroup ?? "", quality ?? "", createdUtc));
+                                        chapters.Add(new PeerChapterEntry(chapterId, manifestHash ?? "", title ?? "", chapterNumber, language ?? "", scanGroup ?? "", quality ?? "", createdUtc));
                                 }
                             }
 
@@ -119,13 +121,18 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             // Batch-resolve series titles from tracker
             var allSeriesIds = catalogs.SelectMany(c => c.Series.Select(s => s.SeriesId)).Distinct().ToArray();
             var titleMap = new Dictionary<string, string>();
+            var externalMangaIdMap = new Dictionary<string, string>();
             if (allSeriesIds.Length > 0)
             {
                 try
                 {
                     var summaries = await _seriesRegistry.SearchSeriesAsync("", ids: allSeriesIds);
                     foreach (var s in summaries)
+                    {
                         titleMap[s.SeriesId] = s.Title;
+                        if (!string.IsNullOrEmpty(s.ExternalMangaId))
+                            externalMangaIdMap[s.SeriesId] = s.ExternalMangaId;
+                    }
                 }
                 catch { /* tracker offline — fall back to SeriesId */ }
             }
@@ -139,10 +146,12 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                 {
                     SeriesId = s.SeriesId,
                     SeriesTitle = titleMap.TryGetValue(s.SeriesId, out var title) ? title : null,
-                    CoverUrl = _coverStore.HasCover(s.SeriesId) ? $"/api/peer/cover/{Uri.EscapeDataString(s.SeriesId)}" : null,
+                    ExternalMangaId = externalMangaIdMap.TryGetValue(s.SeriesId, out var extId) ? extId : null,
                     Chapters = s.Chapters.Select(ch => new
                     {
                         ChapterId = ch.ChapterId,
+                        ManifestHash = ch.ManifestHash,
+                        NodeId = c.NodeId,
                         Title = ch.Title,
                         ChapterNumber = ch.ChapterNumber,
                         Language = ch.Language,
