@@ -24,6 +24,13 @@ export async function deleteManifest(hash: string): Promise<void> {
     if (!response.ok) throw new Error('Failed to delete manifest');
 }
 
+export async function downloadManifest(hash: string): Promise<void> {
+    const response = await apiFetch(`/api/node/storage/manifests/${hash}/download`, {
+        method: 'POST'
+    });
+    if (!response.ok) throw new Error('Failed to download manifest');
+}
+
 export async function bulkDeleteManifests(hashes: string[]): Promise<void> {
     const response = await apiFetch('/api/node/storage/manifests', {
         method: 'DELETE',
@@ -48,6 +55,7 @@ export interface LocalChapterManifest {
     scanGroup: string;
     quality: string;
     uploadedAt: string;
+    isDownloaded: boolean;
 }
 
 export interface LocalChapter {
@@ -81,8 +89,8 @@ export async function getLocalAllSeries(): Promise<LocalSeriesSummary[]> {
     return await response.json();
 }
 
-export async function getLocalSeriesData(seriesId: string): Promise<LocalSeriesData> {
-    const response = await apiFetch(`/api/node/storage/series/${encodeURIComponent(seriesId)}`);
+export async function getLocalSeriesData(seriesId: string, includeReplicated: boolean = false): Promise<LocalSeriesData> {
+    const response = await apiFetch(`/api/node/storage/series/${encodeURIComponent(seriesId)}?includeReplicated=${includeReplicated}`);
     if (!response.ok) throw new Error(`Failed to fetch local series data (HTTP ${response.status})`);
     return await response.json();
 }

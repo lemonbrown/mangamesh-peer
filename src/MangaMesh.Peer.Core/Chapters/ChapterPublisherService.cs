@@ -83,7 +83,7 @@ namespace MangaMesh.Peer.Core.Chapters
                 return (hash, true);
 
             // Save unsigned manifest first
-            await _manifestStore.SaveAsync(hash, chapterManifest);
+            await _manifestStore.SaveAsync(hash, chapterManifest, isDownloaded: true);
 
             // Sign manifest
             var signedManifest = _manifestSigning.SignManifest(chapterManifest, key);
@@ -116,7 +116,7 @@ namespace MangaMesh.Peer.Core.Chapters
 
             // Re-save with signature
             chapterManifest = chapterManifest with { Signature = signedManifest.Signature };
-            await _manifestStore.SaveAsync(hash, chapterManifest);
+            await _manifestStore.SaveAsync(hash, chapterManifest, isDownloaded: true);
 
             // Announce to DHT so the gateway can discover this node as a provider
             if (_dhtNode != null)

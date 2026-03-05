@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { readChapter, getChapterDetails } from '../api/series';
-import { getManifestFlagSummary, loadLocallyFlagged, saveLocallyFlagged } from '../api/flags';
 import type { FullChapterManifest } from '../types/api';
+import { downloadManifest, getLocalSeriesData } from '../api/storage';
+import { getManifestFlagSummary, loadLocallyFlagged, saveLocallyFlagged } from '../api/flags';
 import FlagModal from './FlagModal';
 import ReportPeerModal from './ReportPeerModal';
 
@@ -23,6 +24,10 @@ export default function Reader() {
     const [isLocallyFlagged, setIsLocallyFlagged] = useState(false);
     const [flagModalOpen, setFlagModalOpen] = useState(false);
     const [reportPeerModalOpen, setReportPeerModalOpen] = useState(false);
+
+    // Download state
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [hasDownloaded, setHasDownloaded] = useState(false);
 
     useEffect(() => {
         async function load() {
@@ -62,6 +67,16 @@ export default function Reader() {
                 // This call ensures content is synced locally via P2P
                 const data = await readChapter(seriesId, chapterId, resolvedManifestHash);
                 setManifest(data);
+
+                // Check download status asynchronously
+                getLocalSeriesData(seriesId)
+                    .then(localData => {
+                        const downloaded = localData.chapters.some(c =>
+                            c.manifests.some(m => m.manifestHash === resolvedManifestHash && m.isDownloaded)
+                        );
+                        if (downloaded) setHasDownloaded(true);
+                    })
+                    .catch(e => console.warn('Failed to check download status', e));
             } catch (e) {
                 console.error(e);
                 setError('Failed to load chapter content. Ensure peers are online.');
@@ -129,6 +144,47 @@ export default function Reader() {
                 </div>
 
                 <div className="flex items-center space-x-4">
+                    {/* Download button */}
+                    {hasDownloaded ? (
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-green-400">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="hidden sm:inline">Downloaded</span>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            disabled={isDownloading || !resolvedHash}
+                            onClick={async () => {
+                                if (!resolvedHash) return;
+                                setIsDownloading(true);
+                                try {
+                                    await downloadManifest(resolvedHash);
+                                    setHasDownloaded(true);
+                                } catch (e) {
+                                    alert('Failed to download: ' + (e instanceof Error ? e.message : 'Unknown error'));
+                                } finally {
+                                    setIsDownloading(false);
+                                }
+                            }}
+                            title="Download chapter to library"
+                            className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-blue-400 transition-colors disabled:opacity-50"
+                        >
+                            {isDownloading ? (
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            )}
+                            <span className="hidden sm:inline">Download</span>
+                        </button>
+                    )}
+
                     {/* Report peer button — only shown when content came from a remote peer */}
                     {(manifest.deliveredByNodeId ?? broadcastNodeId) && (
                         <button
@@ -149,11 +205,10 @@ export default function Reader() {
                         type="button"
                         onClick={() => setFlagModalOpen(true)}
                         title={isLocallyFlagged ? 'You reported an issue with this chapter' : 'Flag this chapter'}
-                        className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                            isLocallyFlagged
-                                ? 'text-red-400'
-                                : 'text-gray-400 hover:text-red-400'
-                        }`}
+                        className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isLocallyFlagged
+                            ? 'text-red-400'
+                            : 'text-gray-400 hover:text-red-400'
+                            }`}
                     >
                         <svg className="w-4 h-4" viewBox="0 0 24 24">
                             <line x1="5" y1="21" x2="5" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

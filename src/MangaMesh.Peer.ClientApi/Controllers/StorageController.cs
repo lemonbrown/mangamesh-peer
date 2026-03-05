@@ -1,6 +1,7 @@
 using MangaMesh.Peer.ClientApi.Models;
 using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Peer.Core.Manifests;
+using MangaMesh.Peer.Core.Node;
 using MangaMesh.Peer.Core.Storage;
 using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -40,7 +41,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         {
             var all = await manifestStore.GetAllWithDataAsync();
 
-            IEnumerable<(ManifestHash Hash, ChapterManifest Manifest)> filtered = all;
+            IEnumerable<(ManifestHash Hash, ChapterManifest Manifest, bool IsDownloaded)> filtered = all;
             if (!string.IsNullOrWhiteSpace(q))
             {
                 filtered = all.Where(x =>
@@ -69,6 +70,31 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                 .ToList();
 
             return Ok(new { items, total, offset, limit });
+        }
+
+        [HttpPost("manifests/{hash}/download")]
+        public async Task<ActionResult> DownloadManifest(
+            string hash,
+            [FromServices] IManifestStore manifestStore,
+            [FromServices] IPeerFetcher peerFetcher)
+        {
+            if (!ManifestHash.TryParse(hash, out var manifestHash))
+                return BadRequest("Invalid hash format");
+
+            try
+            {
+                // Fetch the manifest and its pages from the DHT/Peers
+                var (storedHash, _) = await peerFetcher.FetchManifestAsync(hash);
+
+                // Mark it as explicitly downloaded by the user
+                await manifestStore.MarkAsDownloadedAsync(storedHash);
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Failed to download manifest: {ex.Message}");
+            }
         }
 
         [HttpDelete("manifests/{hash}")]
@@ -116,6 +142,7 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         {
             var all = await manifestStore.GetAllWithDataAsync();
             var seriesList = all
+                .Where(x => x.IsDownloaded)
                 .GroupBy(x => x.Manifest.SeriesId)
                 .Select(g =>
                 {
@@ -145,10 +172,17 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         /// Used by the Peer UI local library — no index/network calls required.
         /// </summary>
         [HttpGet("series/{seriesId}")]
-        public async Task<ActionResult> GetLocalSeries(string seriesId, [FromServices] IManifestStore manifestStore)
+        public async Task<ActionResult> GetLocalSeries(string seriesId, [FromServices] IManifestStore manifestStore, [FromQuery] bool includeReplicated = false)
         {
             var all = await manifestStore.GetAllWithDataAsync();
-            var forSeries = all.Where(x => x.Manifest.SeriesId == seriesId).ToList();
+            var forSeriesQuery = all.Where(x => x.Manifest.SeriesId == seriesId);
+
+            if (!includeReplicated)
+            {
+                forSeriesQuery = forSeriesQuery.Where(x => x.IsDownloaded);
+            }
+
+            var forSeries = forSeriesQuery.ToList();
 
             var seriesTitle = forSeries.Select(x => x.Manifest.SeriesTitle).FirstOrDefault(t => !string.IsNullOrEmpty(t));
             var externalMangaId = forSeries.Select(x => x.Manifest.ExternalMangaId).FirstOrDefault(id => !string.IsNullOrEmpty(id));
@@ -171,7 +205,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                             language = x.Manifest.Language,
                             scanGroup = x.Manifest.ScanGroup,
                             quality = x.Manifest.Quality,
-                            uploadedAt = x.Manifest.CreatedUtc
+                            uploadedAt = x.Manifest.CreatedUtc,
+                            isDownloaded = x.IsDownloaded
                         }).ToList()
                     };
                 })

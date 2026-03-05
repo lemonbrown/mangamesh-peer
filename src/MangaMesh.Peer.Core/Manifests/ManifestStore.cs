@@ -34,20 +34,25 @@ namespace MangaMesh.Peer.Core.Manifests
             return Task.FromResult<IEnumerable<ManifestHash>>(hashes);
         }
 
-        public async Task<IReadOnlyList<(ManifestHash Hash, ChapterManifest Manifest)>> GetAllWithDataAsync()
+        public async Task<IReadOnlyList<(ManifestHash Hash, ChapterManifest Manifest, bool IsDownloaded)>> GetAllWithDataAsync()
         {
             var hashes = await GetAllHashesAsync();
-            var result = new List<(ManifestHash, ChapterManifest)>();
+            var result = new List<(ManifestHash, ChapterManifest, bool)>();
             foreach (var hash in hashes)
             {
                 var manifest = await GetAsync(hash);
                 if (manifest != null)
-                    result.Add((hash, manifest));
+                    result.Add((hash, manifest, true)); // Assume true for legacy store
             }
             return result.OrderByDescending(x => x.Item2.CreatedUtc).ToList();
         }
 
-        public async Task SaveAsync(ManifestHash hash, ChapterManifest manifest)
+        public Task MarkAsDownloadedAsync(ManifestHash hash)
+        {
+            return Task.CompletedTask;
+        }
+
+        public async Task SaveAsync(ManifestHash hash, ChapterManifest manifest, bool isDownloaded = false)
         {
             var path = GetPath(hash);
             var json = JsonSerializer.Serialize(manifest, JsonOptions);
@@ -80,7 +85,7 @@ namespace MangaMesh.Peer.Core.Manifests
         private string GetPath(ManifestHash hash)
             => Path.Combine(_root, $"{hash.Value}.json");
 
-        public Task<ManifestHash> PutAsync(ChapterManifest manifest)
+        public Task<ManifestHash> PutAsync(ChapterManifest manifest, bool isDownloaded = false)
         {
             throw new NotImplementedException();
         }

@@ -8,14 +8,14 @@ import LangFlag from '../components/LangFlag';
 import FlagModal from '../components/FlagModal';
 
 const FLAG_CATEGORY_LABELS: Record<FlagCategory, string> = {
-    quality_low:       'Low Quality',
-    page_order:        'Wrong Page Order',
-    missing_pages:     'Missing Pages',
-    wrong_chapter:     'Wrong Chapter',
-    duplicate:         'Duplicate',
-    nsfw:              'NSFW',
+    quality_low: 'Low Quality',
+    page_order: 'Wrong Page Order',
+    missing_pages: 'Missing Pages',
+    wrong_chapter: 'Wrong Chapter',
+    duplicate: 'Duplicate',
+    nsfw: 'NSFW',
     malicious_content: 'Malicious Content',
-    bad_title:         'Bad Title',
+    bad_title: 'Bad Title',
 };
 
 export default function SeriesDetails() {
@@ -35,6 +35,7 @@ export default function SeriesDetails() {
         async function load() {
             if (!seriesId) return;
             try {
+                // Fetch only downloaded manifests
                 const seriesData = await getLocalSeriesData(seriesId);
 
                 const sorted = [...seriesData.chapters].sort((a, b) => b.chapterNumber - a.chapterNumber);
@@ -47,7 +48,7 @@ export default function SeriesDetails() {
                 if (allHashes.length > 0) {
                     getManifestFlagSummaries(allHashes).then(summaries => {
                         setFlagWarnings(summaries);
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
             } catch (e) {
                 setError('Failed to load series data');
@@ -66,6 +67,8 @@ export default function SeriesDetails() {
             return next;
         });
     }
+
+
 
     if (loading) return <div className="p-8 text-gray-500">Loading chapters...</div>;
     if (error) return <div className="p-8 text-red-500">{error}</div>;
@@ -209,16 +212,21 @@ export default function SeriesDetails() {
                                                             </div>
                                                         </Link>
 
+
+
                                                         {/* Flag button */}
                                                         <button
                                                             type="button"
-                                                            onClick={() => setFlagModal({ manifestHash: mHash, chapterLabel })}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setFlagModal({ manifestHash: mHash, chapterLabel });
+                                                            }}
                                                             title={isLocalFlagged ? 'You reported an issue with this chapter' : 'Flag this chapter'}
-                                                            className={`flex items-center px-3 border-l border-gray-100 transition-colors shrink-0 ${
-                                                                isLocalFlagged
-                                                                    ? 'text-red-500'
-                                                                    : 'text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100'
-                                                            }`}
+                                                            className={`flex items-center px-3 border-l border-gray-100 transition-colors shrink-0 ${isLocalFlagged
+                                                                ? 'text-red-500'
+                                                                : 'text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100'
+                                                                }`}
                                                         >
                                                             <svg className="w-4 h-4" viewBox="0 0 24 24">
                                                                 <line x1="5" y1="21" x2="5" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

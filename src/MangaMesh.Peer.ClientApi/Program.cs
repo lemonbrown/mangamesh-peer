@@ -208,11 +208,21 @@ using (var scope = app.Services.CreateScope())
             ""SeriesId"" TEXT NOT NULL,
             ""ChapterId"" TEXT NOT NULL,
             ""DataJson"" TEXT NOT NULL,
-            ""CreatedUtc"" TEXT NOT NULL
+            ""CreatedUtc"" TEXT NOT NULL,
+            ""IsDownloaded"" INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS ""IX_Manifests_SeriesId"" ON ""Manifests"" (""SeriesId"");
         CREATE INDEX IF NOT EXISTS ""IX_Manifests_ChapterId"" ON ""Manifests"" (""ChapterId"");
     ");
+
+    try
+    {
+        db.Database.ExecuteSqlRaw(@"ALTER TABLE ""Manifests"" ADD COLUMN ""IsDownloaded"" INTEGER NOT NULL DEFAULT 1;");
+    }
+    catch
+    {
+        // Column likely exists
+    }
 
     // Migration: specific logic to move keys from JSON to SQLite
     if (!db.Keys.Any())

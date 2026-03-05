@@ -45,7 +45,7 @@ namespace MangaMesh.Peer.Core.Manifests
                 .ToListAsync();
         }
 
-        public async Task<IReadOnlyList<(ManifestHash Hash, ChapterManifest Manifest)>> GetAllWithDataAsync()
+        public async Task<IReadOnlyList<(ManifestHash Hash, ChapterManifest Manifest, bool IsDownloaded)>> GetAllWithDataAsync()
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ClientDbContext>();
@@ -53,14 +53,26 @@ namespace MangaMesh.Peer.Core.Manifests
                 .OrderByDescending(m => m.CreatedUtc)
                 .ToListAsync();
 
-            var result = new List<(ManifestHash, ChapterManifest)>(entities.Count);
+            var result = new List<(ManifestHash, ChapterManifest, bool)>(entities.Count);
             foreach (var entity in entities)
             {
                 var manifest = Deserialize(entity.DataJson);
                 if (manifest != null)
-                    result.Add((new ManifestHash(entity.Hash), manifest));
+                    result.Add((new ManifestHash(entity.Hash), manifest, entity.IsDownloaded));
             }
             return result;
+        }
+
+        public async Task MarkAsDownloadedAsync(ManifestHash hash)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ClientDbContext>();
+            var entity = await context.Manifests.FindAsync(hash.Value);
+            if (entity != null && !entity.IsDownloaded)
+            {
+                entity.IsDownloaded = true;
+                await context.SaveChangesAsync();
+            }
         }
 
         public async Task<ChapterManifest?> GetAsync(ManifestHash hash)
@@ -109,7 +121,7 @@ namespace MangaMesh.Peer.Core.Manifests
             return (Convert.ToHexString(hashBytes).ToLowerInvariant(), hashes.Count);
         }
 
-        public async Task<ManifestHash> PutAsync(ChapterManifest manifest)
+        public async Task<ManifestHash> PutAsync(ChapterManifest manifest, bool isDownloaded = false)
         {
             var options = new JsonSerializerOptions
             {
@@ -126,12 +138,12 @@ namespace MangaMesh.Peer.Core.Manifests
             var hashBytes = SHA256.HashData(bytes);
             var hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
-            await SaveAsync(new ManifestHash(hash), manifest);
+            await SaveAsync(new ManifestHash(hash), manifest, isDownloaded);
 
             return new ManifestHash(hash);
         }
 
-        public async Task SaveAsync(ManifestHash hash, ChapterManifest manifest)
+        public async Task SaveAsync(ManifestHash hash, ChapterManifest manifest, bool isDownloaded = false)
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ClientDbContext>();
@@ -147,7 +159,8 @@ namespace MangaMesh.Peer.Core.Manifests
                 SeriesId = manifest.SeriesId,
                 ChapterId = manifest.ChapterId,
                 DataJson = json,
-                CreatedUtc = DateTime.UtcNow
+                CreatedUtc = DateTime.UtcNow,
+                IsDownloaded = isDownloaded
             };
 
             context.Manifests.Add(entity);

@@ -6,6 +6,7 @@ public sealed class ReplicationOptions
 {
     public bool Enabled { get; set; } = true;
     public bool IsSuperSeeder { get; set; } = false;
+    public bool IsFullSeeder { get; set; } = false;
     public BandwidthClass BandwidthClass { get; set; } = BandwidthClass.Medium;
 
     // Replica targets by chapter age tier

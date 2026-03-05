@@ -12,6 +12,7 @@ import Logs from './pages/Logs';
 import Peer from './pages/Peer';
 import Broadcasts from './pages/Broadcasts';
 import BroadcastSeriesDetail from './pages/BroadcastSeriesDetail';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="peer" element={<Peer />} />
           <Route path="broadcasts" element={<Broadcasts />} />
           <Route path="broadcasts/:seriesId" element={<BroadcastSeriesDetail />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

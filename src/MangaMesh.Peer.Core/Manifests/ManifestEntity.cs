@@ -16,6 +16,8 @@ namespace MangaMesh.Peer.Core.Manifests
         [Required]
         public string DataJson { get; set; } = default!;
 
+        public bool IsDownloaded { get; set; }
+
         public DateTime CreatedUtc { get; set; }
     }
 }

@@ -9,18 +9,76 @@ function chFmt(n: number) {
     return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function NodeLink({ nodeId, seriesId, release }: { nodeId: string; seriesId: string; release: ChapterRelease }) {
-    const to = `/series/${seriesId}/read/${release.chapterId}?manifest=${release.manifestHash}&nodeId=${encodeURIComponent(nodeId)}`;
+import { downloadManifest, getLocalSeriesData } from '../api/storage';
+
+function ManifestLink({ seriesId, release }: { seriesId: string; release: ChapterRelease }) {
+    // Pick first node as the source node for reading if we need to actively fetch chunks
+    const nodeId = release.nodeIds[0] ?? '';
+    const to = `/series/${seriesId}/read/${release.chapterId}?manifest=${release.manifestHash}${nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : ''}`;
+
     return (
         <Link
             to={to}
+            title={release.nodeIds.length > 0 ? `Available on ${release.nodeIds.length} peers` : 'No peers known'}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 text-blue-700 font-mono text-[11px] transition-colors group"
         >
             <svg className="w-3 h-3 shrink-0 text-blue-400 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            {nodeId}
+            {release.manifestHash.slice(0, 8)}
         </Link>
+    );
+}
+
+function DownloadButton({ release, initialDownloaded }: { release: ChapterRelease, initialDownloaded?: boolean }) {
+    const [downloading, setDownloading] = useState(false);
+    const [downloaded, setDownloaded] = useState(initialDownloaded ?? false);
+
+    useEffect(() => {
+        if (initialDownloaded) setDownloaded(true);
+    }, [initialDownloaded]);
+
+    const handleDownload = async () => {
+        setDownloading(true);
+        try {
+            await downloadManifest(release.manifestHash);
+            setDownloaded(true);
+        } catch (e) {
+            alert('Failed to download: ' + (e instanceof Error ? e.message : 'Unknown error'));
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    if (downloaded) {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-green-200 bg-green-50 text-green-700 text-[11px] font-medium">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Downloaded
+            </span>
+        );
+    }
+
+    return (
+        <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[11px] font-medium transition-colors disabled:opacity-50"
+        >
+            {downloading ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+            ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+            )}
+            Download
+        </button>
     );
 }
 
@@ -119,8 +177,27 @@ export default function BroadcastSeriesDetail() {
     const location = useLocation();
 
     const [entry, setEntry] = useState<SeriesEntry | null>(location.state as SeriesEntry | null);
+    const [localManifests, setLocalManifests] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(!entry);
     const [error, setError] = useState<string | null>(null);
+
+    const loadLocalManifests = useCallback(async (id: string) => {
+        try {
+            // We need all manifests, not just explicitly downloaded ones, because 
+            // the network may have replicated it which still counts as a blob we have locally.
+            // Oh wait, getLocalSeriesData signature: getLocalSeriesData(seriesId: string, includeReplicated: boolean = false)
+            const localData = await getLocalSeriesData(id, true);
+            const hashes = new Set<string>();
+            for (const ch of localData.chapters) {
+                for (const m of ch.manifests) {
+                    if (m.isDownloaded) hashes.add(m.manifestHash);
+                }
+            }
+            setLocalManifests(hashes);
+        } catch (e) {
+            console.warn("Could not load local library stats", e);
+        }
+    }, []);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -129,16 +206,25 @@ export default function BroadcastSeriesDetail() {
             const all = groupBySeries(await getBroadcasts());
             const found = all.find(s => s.seriesId === seriesId) ?? null;
             setEntry(found);
+
+            if (found) {
+                await loadLocalManifests(found.seriesId);
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to fetch broadcasts.');
         } finally {
             setLoading(false);
         }
-    }, [seriesId]);
+    }, [seriesId, loadLocalManifests]);
 
     useEffect(() => {
-        if (!entry) load();
-    }, [entry, load]);
+        if (!entry) {
+            load();
+        } else {
+            // If entry was provided via location.state, we still need to fetch the local manifest sync status
+            loadLocalManifests(entry.seriesId);
+        }
+    }, [entry, load, loadLocalManifests]);
 
     if (loading) return <div className="p-8 text-gray-500">Loading...</div>;
     if (error) return <div className="p-8 text-red-500">{error}</div>;
@@ -186,14 +272,14 @@ export default function BroadcastSeriesDetail() {
                 </div>
             </div>
 
-            {/* Chapter list */}
+            // Chapter list
             {!entry || entry.chapters.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
                     {!entry ? 'Series not found in current DHT broadcasts.' : 'No chapters found.'}
                 </div>
             ) : (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-100">
-                    {entry.chapters.map((ch) => (
+                    {[...entry.chapters].reverse().map((ch) => (
                         <div key={ch.chapterNumber} className="p-4">
                             {/* Chapter heading */}
                             <div className="flex items-baseline gap-2 mb-3">
@@ -224,12 +310,10 @@ export default function BroadcastSeriesDetail() {
                                             <span className="text-[11px] text-gray-400">{formatDate(r.createdUtc)}</span>
                                         )}
                                         {r.nodeIds.length > 0 && <PeekButton release={r} />}
-                                        {r.nodeIds.length === 0 ? (
-                                            <span className="text-[11px] text-gray-400 italic">No nodes known.</span>
-                                        ) : (
-                                            r.nodeIds.map(nid => (
-                                                <NodeLink key={nid} nodeId={nid} seriesId={seriesId!} release={r} />
-                                            ))
+                                        <ManifestLink seriesId={seriesId!} release={r} />
+                                        <DownloadButton release={r} initialDownloaded={localManifests.has(r.manifestHash)} />
+                                        {r.nodeIds.length === 0 && (
+                                            <span className="text-[11px] text-gray-400 italic">(No nodes currently actively seeding)</span>
                                         )}
                                     </div>
                                 ))}
