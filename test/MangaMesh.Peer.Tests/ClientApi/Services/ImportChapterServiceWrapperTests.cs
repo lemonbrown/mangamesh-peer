@@ -1,9 +1,12 @@
 using MangaMesh.Peer.ClientApi.Models;
 using MangaMesh.Peer.ClientApi.Services;
 using MangaMesh.Peer.Core.Chapters;
+using MangaMesh.Peer.Core.Configuration;
 using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Shared.Models;
+using MangaMesh.Shared.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -28,7 +31,20 @@ public class ImportChapterServiceWrapperTests
             _publisher.Object,
             NullLogger<ImportChapterService>.Instance);
 
-        _sut = new ImportChapterServiceWrapper(coreService);
+        var coverStore = new SeriesCoverStore(Options.Create(new BlobStoreOptions
+        {
+            RootPath = Path.Combine(Path.GetTempPath(), "mangamesh-test-covers")
+        }));
+
+        var metadataProvider = new Mock<IMangaMetadataProvider>();
+        var httpClientFactory = new Mock<IHttpClientFactory>();
+
+        _sut = new ImportChapterServiceWrapper(
+            coreService,
+            coverStore,
+            metadataProvider.Object,
+            httpClientFactory.Object,
+            NullLogger<ImportChapterServiceWrapper>.Instance);
     }
 
     private ImportChapterRequestDto BuildDto(string releaseType = "VerifiedScanlation") =>

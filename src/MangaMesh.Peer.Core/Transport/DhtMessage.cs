@@ -33,6 +33,24 @@ namespace MangaMesh.Peer.Core.Transport
         /// </summary>
         public bool SupportsWebRtc { get; set; }
 
+        // Storage profile — gossipped with every message so receivers can make
+        // replication decisions without a separate round-trip.
+
+        /// <summary>Total configured storage quota in bytes. 0 = not advertised.</summary>
+        public long StorageCapacityBytes { get; set; }
+
+        /// <summary>Bytes currently used for blob storage.</summary>
+        public long StorageUsedBytes { get; set; }
+
+        /// <summary>Bandwidth tier: 0=Low, 1=Medium, 2=High (maps to BandwidthClass enum).</summary>
+        public byte BandwidthClass { get; set; }
+
+        /// <summary>Uptime score 0–100. Higher = more reliable.</summary>
+        public byte UptimeScore { get; set; }
+
+        /// <summary>True if this peer voluntarily seeds full series.</summary>
+        public bool IsSuperSeeder { get; set; }
+
         [System.Text.Json.Serialization.JsonIgnore]
         public string ComputedSenderIp { get; set; } = string.Empty;
 

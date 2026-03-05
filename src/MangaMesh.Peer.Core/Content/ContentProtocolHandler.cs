@@ -1,12 +1,11 @@
-using System;
 using System.IO;
-using System.Threading.Tasks;
-using System.Text.Json;
 using System.Text;
-using MangaMesh.Peer.Core.Transport;
+using System.Text.Json;
 using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Peer.Core.Manifests;
 using MangaMesh.Peer.Core.Node;
+using MangaMesh.Peer.Core.Replication;
+using MangaMesh.Peer.Core.Transport;
 using MangaMesh.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,11 +32,14 @@ namespace MangaMesh.Peer.Core.Content
 
             return msg switch
             {
-                GetManifest m => HandleManifestAsync(from, m),
-                GetBlob b => HandleBlobAsync(from, b),
-                ManifestData d => HandleManifestDataAsync(from, d),
-                BlobData bd => HandleBlobDataAsync(from, bd),
-                _ => Task.CompletedTask
+                GetManifest m         => HandleManifestAsync(from, m),
+                GetBlob b             => HandleBlobAsync(from, b),
+                ManifestData d        => HandleManifestDataAsync(from, d),
+                BlobData bd           => HandleBlobDataAsync(from, bd),
+                ReplicateChunk rc     => HandleReplicateChunkAsync(from, rc),
+                ChapterHealthGossip g => HandleChapterHealthGossipAsync(from, g),
+                ChunkReplicaQuery q   => HandleChunkReplicaQueryAsync(from, q),
+                _                     => Task.CompletedTask
             };
         }
 
@@ -75,12 +77,11 @@ namespace MangaMesh.Peer.Core.Content
                 {
                     using var ms = new MemoryStream();
                     await stream.CopyToAsync(ms);
-                    var content = ms.ToArray();
 
                     var response = new BlobData
                     {
                         BlobHash = b.BlobHash,
-                        Data = content,
+                        Data = ms.ToArray(),
                         RequestId = b.RequestId
                     };
 
@@ -99,6 +100,90 @@ namespace MangaMesh.Peer.Core.Content
         {
             DhtNode?.HandleContentMessage(d);
             return Task.CompletedTask;
+        }
+
+        private async Task HandleReplicateChunkAsync(NodeAddress from, ReplicateChunk rc)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var decisionEngine = scope.ServiceProvider.GetService<IReplicationDecisionEngine>();
+            var executor = scope.ServiceProvider.GetService<IReplicationExecutor>();
+
+            ReplicateChunkAck ack;
+
+            if (decisionEngine == null || executor == null)
+            {
+                ack = new ReplicateChunkAck
+                {
+                    BlobHash = rc.BlobHash,
+                    Accepted = false,
+                    DeclineReason = "ReplicationDisabled",
+                    RequestId = rc.RequestId
+                };
+            }
+            else
+            {
+                bool shouldAccept = await decisionEngine.ShouldAcceptChunkAsync(rc.BlobHash, rc.ChapterId);
+
+                if (shouldAccept)
+                {
+                    bool success = await executor.ReplicateChunkAsync(rc.BlobHash);
+                    ack = new ReplicateChunkAck
+                    {
+                        BlobHash = rc.BlobHash,
+                        Accepted = success,
+                        DeclineReason = success ? null : "FetchFailed",
+                        RequestId = rc.RequestId
+                    };
+
+                    if (success && !string.IsNullOrEmpty(rc.ChapterId))
+                    {
+                        var diversityTracker = scope.ServiceProvider.GetService<IChapterDiversityTracker>();
+                        diversityTracker?.RecordChunkAccepted(rc.ChapterId);
+                    }
+                }
+                else
+                {
+                    ack = new ReplicateChunkAck
+                    {
+                        BlobHash = rc.BlobHash,
+                        Accepted = false,
+                        DeclineReason = "DiversityLimit",
+                        RequestId = rc.RequestId
+                    };
+                }
+            }
+
+            await SendResponseAsync(from, ack, rc.SenderPort);
+        }
+
+        private Task HandleChapterHealthGossipAsync(NodeAddress from, ChapterHealthGossip g)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var healthMonitor = scope.ServiceProvider.GetService<IChapterHealthMonitor>();
+            healthMonitor?.MergeGossip(g.Items);
+            DhtNode?.HandleContentMessage(g);
+            return Task.CompletedTask;
+        }
+
+        private async Task HandleChunkReplicaQueryAsync(NodeAddress from, ChunkReplicaQuery q)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var healthMonitor = scope.ServiceProvider.GetService<IChapterHealthMonitor>();
+
+            var estimates = new Dictionary<string, int>();
+            if (healthMonitor != null)
+            {
+                foreach (string hash in q.BlobHashes)
+                    estimates[hash] = healthMonitor.EstimateReplicaCount(hash);
+            }
+
+            var response = new ChunkReplicaResponse
+            {
+                Estimates = estimates,
+                RequestId = q.RequestId
+            };
+
+            await SendResponseAsync(from, response, q.SenderPort);
         }
 
         private async Task SendResponseAsync(NodeAddress to, ContentMessage message, int senderPort)

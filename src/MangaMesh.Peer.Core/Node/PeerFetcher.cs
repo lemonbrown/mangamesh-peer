@@ -16,6 +16,7 @@ namespace MangaMesh.Peer.Core.Node
         private readonly IBlobStore _blobStore;
         private readonly IManifestStore _manifestStore;
         private readonly IDhtNode _dhtNode;
+        private readonly ISourceProviderCache _providerCache;
         private readonly ILogger<PeerFetcher> _logger;
 
         public PeerFetcher(
@@ -23,12 +24,14 @@ namespace MangaMesh.Peer.Core.Node
             IBlobStore blobStore,
             IManifestStore manifestStore,
             IDhtNode dhtNode,
+            ISourceProviderCache providerCache,
             ILogger<PeerFetcher> logger)
         {
             _peerLocator = peerLocator;
             _blobStore = blobStore;
             _manifestStore = manifestStore;
             _dhtNode = dhtNode;
+            _providerCache = providerCache;
             _logger = logger;
         }
 
@@ -63,11 +66,15 @@ namespace MangaMesh.Peer.Core.Node
                     }
 
                     await _manifestStore.SaveAsync(hash, manifest);
-                    _logger.LogInformation("Stored chapter manifest {Hash}, fetching {PageCount} page blobs", manifestHash, manifest.Files.Count);
 
-                    await FetchAllPageDataAsync(address, manifest);
+                    // Register source address for every page blob hash so BlobController can
+                    // proxy-fetch them on demand without storing any blob data locally.
+                    _providerCache.RegisterSources(manifest.Files.Select(f => f.Hash), address);
 
-                    _logger.LogInformation("Successfully fetched and stored manifest {Hash} with all page content from peer {NodeId}", manifestHash, nodeId ?? "unknown");
+                    _logger.LogInformation(
+                        "Stored manifest {Hash} ({PageCount} pages) from peer {NodeId}; page blobs registered for proxy",
+                        manifestHash, manifest.Files.Count, nodeId ?? "unknown");
+
                     return (hash, nodeId);
                 }
                 catch (Exception ex)
@@ -80,6 +87,25 @@ namespace MangaMesh.Peer.Core.Node
                 $"Could not fetch manifest {manifestHash} from any of the {providers.Count} available peer(s).");
         }
 
+        public async Task<byte[]?> FetchBlobForProxyAsync(
+            NodeAddress source, string blobHash, CancellationToken ct = default)
+        {
+            try
+            {
+                var request = new GetBlob { BlobHash = blobHash };
+                var response = await _dhtNode.SendContentRequestAsync(source, request, TimeSpan.FromSeconds(30));
+                return response is BlobData data ? data.Data : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Proxy fetch of blob {Hash} from {Host}:{Port} failed",
+                    blobHash, source.Host, source.Port);
+                return null;
+            }
+        }
+
+        // ── Private helpers ───────────────────────────────────────────────────
+
         private async Task<List<(NodeAddress Address, string? NodeId)>> FindProvidersAsync(string manifestHash)
         {
             var providers = new List<(NodeAddress Address, string? NodeId)>();
@@ -88,7 +114,6 @@ namespace MangaMesh.Peer.Core.Node
             try { hashBytes = Convert.FromHexString(manifestHash); }
             catch { hashBytes = Encoding.UTF8.GetBytes(manifestHash); }
 
-            // Primary: DHT lookup — finds nodes that stored this manifest hash
             var dhtProviders = await _dhtNode.FindValueWithAddressAsync(hashBytes);
             providers.AddRange(dhtProviders.Select(p => (
                 p.Address,
@@ -96,7 +121,6 @@ namespace MangaMesh.Peer.Core.Node
             )));
             _logger.LogInformation("DHT lookup for {Hash} found {Count} provider(s)", manifestHash, providers.Count);
 
-            // Fallback: ask tracker for peer NodeIds then resolve via routing table
             if (providers.Count == 0)
             {
                 _logger.LogInformation("DHT found no providers; falling back to tracker peer list for {Hash}", manifestHash);
@@ -118,17 +142,17 @@ namespace MangaMesh.Peer.Core.Node
                             }
                             else
                             {
-                                _logger.LogWarning("Address for NodeId {NodeId} not found in local routing table. Searching DHT for node...", peer.NodeId);
+                                _logger.LogWarning("Address for NodeId {NodeId} not found in routing table, searching DHT", peer.NodeId);
                                 var foundNodes = await _dhtNode.FindNodeAsync(nodeIdBytes);
-                                var targetEntry = foundNodes.FirstOrDefault(n => n.NodeId != null && n.NodeId.SequenceEqual(nodeIdBytes));
-                                if (targetEntry != null && targetEntry.Address != null)
+                                var target = foundNodes.FirstOrDefault(n => n.NodeId?.SequenceEqual(nodeIdBytes) == true);
+                                if (target?.Address != null)
                                 {
-                                    providers.Add((targetEntry.Address, peer.NodeId));
-                                    _logger.LogInformation("Actively resolved tracker peer {NodeId} to {Host}:{Port} via DHT FindNode", peer.NodeId, targetEntry.Address.Host, targetEntry.Address.Port);
+                                    providers.Add((target.Address, peer.NodeId));
+                                    _logger.LogInformation("Resolved tracker peer {NodeId} via DHT FindNode", peer.NodeId);
                                 }
                                 else
                                 {
-                                    _logger.LogWarning("Active DHT lookup for NodeId {NodeId} failed to find the peer.", peer.NodeId);
+                                    _logger.LogWarning("DHT FindNode for {NodeId} found nothing", peer.NodeId);
                                 }
                             }
                         }
@@ -137,12 +161,10 @@ namespace MangaMesh.Peer.Core.Node
                             _logger.LogDebug(ex, "Could not resolve address for NodeId {NodeId}", peer.NodeId);
                         }
                     }
-
-                    _logger.LogInformation("Tracker fallback resolved {Count} peer address(es) for {Hash}", providers.Count, manifestHash);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Exception while fetching fallback peer list from tracker for {Hash}", manifestHash);
+                    _logger.LogError(ex, "Exception fetching fallback peer list from tracker for {Hash}", manifestHash);
                 }
             }
 
@@ -151,103 +173,17 @@ namespace MangaMesh.Peer.Core.Node
 
         private async Task<ChapterManifest?> FetchChapterManifestAsync(NodeAddress address, string manifestHash)
         {
-            try
-            {
-                var request = new GetManifest { ContentHash = manifestHash };
-                var response = await _dhtNode.SendContentRequestAsync(address, request, TimeSpan.FromSeconds(30));
-
-                if (response is not ManifestData data)
-                {
-                    _logger.LogWarning("Peer {Host}:{Port} replied but result was not ManifestData.", address.Host, address.Port);
-                    return null;
-                }
-
-                var json = Encoding.UTF8.GetString(data.Data);
-                return JsonSerializer.Deserialize<ChapterManifest>(json);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "FetchChapterManifestAsync failed for {Host}:{Port}", address.Host, address.Port);
-                throw;
-            }
-        }
-
-        private async Task FetchAllPageDataAsync(NodeAddress sourceAddress, ChapterManifest manifest)
-        {
-            foreach (var file in manifest.Files)
-            {
-                var pageManifestBlobHash = new BlobHash(file.Hash);
-                if (_blobStore.Exists(pageManifestBlobHash))
-                {
-                    _logger.LogDebug("Page manifest blob {Hash} already present, verifying chunks", file.Hash);
-                    await EnsureChunksPresentAsync(sourceAddress, file.Hash);
-                    continue;
-                }
-
-                var pageManifestData = await FetchBlobAsync(sourceAddress, file.Hash);
-                if (pageManifestData == null)
-                {
-                    _logger.LogWarning("Failed to fetch page manifest blob {Hash}", file.Hash);
-                    continue;
-                }
-
-                await StoreBlobAsync(pageManifestData);
-
-                try
-                {
-                    var pageManifest = JsonSerializer.Deserialize<PageManifest>(pageManifestData);
-                    if (pageManifest != null)
-                        await FetchChunksAsync(sourceAddress, pageManifest.Chunks);
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogWarning(ex, "Failed to parse PageManifest for blob {Hash}", file.Hash);
-                }
-            }
-        }
-
-        private async Task EnsureChunksPresentAsync(NodeAddress sourceAddress, string pageHash)
-        {
-            try
-            {
-                await using var stream = await _blobStore.OpenReadAsync(new BlobHash(pageHash));
-                if (stream == null) return;
-
-                var pageManifest = await JsonSerializer.DeserializeAsync<PageManifest>(stream);
-                if (pageManifest != null)
-                    await FetchChunksAsync(sourceAddress, pageManifest.Chunks);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Could not parse existing page manifest {Hash} to verify chunks", pageHash);
-            }
-        }
-
-        private async Task FetchChunksAsync(NodeAddress sourceAddress, IReadOnlyList<string> chunkHashes)
-        {
-            foreach (var chunkHash in chunkHashes)
-            {
-                if (_blobStore.Exists(new BlobHash(chunkHash))) continue;
-
-                var chunkData = await FetchBlobAsync(sourceAddress, chunkHash);
-                if (chunkData != null)
-                    await StoreBlobAsync(chunkData);
-                else
-                    _logger.LogWarning("Failed to fetch image chunk {Hash}", chunkHash);
-            }
-        }
-
-        private async Task<byte[]?> FetchBlobAsync(NodeAddress address, string blobHash)
-        {
-            var request = new GetBlob { BlobHash = blobHash };
+            var request = new GetManifest { ContentHash = manifestHash };
             var response = await _dhtNode.SendContentRequestAsync(address, request, TimeSpan.FromSeconds(30));
-            return response is BlobData data ? data.Data : null;
-        }
 
-        private async Task<BlobHash> StoreBlobAsync(byte[] data)
-        {
-            using var ms = new MemoryStream(data);
-            return await _blobStore.PutAsync(ms);
+            if (response is not ManifestData data)
+            {
+                _logger.LogWarning("Peer {Host}:{Port} replied but result was not ManifestData", address.Host, address.Port);
+                return null;
+            }
+
+            var json = Encoding.UTF8.GetString(data.Data);
+            return JsonSerializer.Deserialize<ChapterManifest>(json);
         }
     }
 }

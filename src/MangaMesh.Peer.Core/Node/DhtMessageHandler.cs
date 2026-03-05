@@ -41,7 +41,12 @@ namespace MangaMesh.Peer.Core.Node
                 {
                     NodeId = message.SenderNodeId,
                     Address = new NodeAddress(message.ComputedSenderIp, message.SenderPort, HttpApiPort: message.SenderHttpApiPort, WebRtcEnabled: message.SupportsWebRtc),
-                    LastSeenUtc = DateTime.UtcNow
+                    LastSeenUtc = DateTime.UtcNow,
+                    StorageCapacityBytes = message.StorageCapacityBytes,
+                    StorageUsedBytes = message.StorageUsedBytes,
+                    BandwidthClass = message.BandwidthClass,
+                    UptimeScore = message.UptimeScore,
+                    IsSuperSeeder = message.IsSuperSeeder
                 });
             }
             else

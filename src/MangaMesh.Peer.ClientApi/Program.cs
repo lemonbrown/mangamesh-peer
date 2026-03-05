@@ -20,6 +20,7 @@ using MangaMesh.Shared.Models;
 using MangaMesh.Shared.Services;
 using MangaMesh.Shared.Extensions;
 using MangaMesh.Peer.Core.Extensions;
+using MangaMesh.Peer.Core.Replication;
 using MangaMesh.Peer.ClientApi.WebRtc;
 using MangaMesh.Shared.Configuration;
 using Microsoft.EntityFrameworkCore;
@@ -121,7 +122,7 @@ builder.Services.AddSingleton<ClientWebRtcService>();
 
 builder.Services.AddMemoryCache();
 
-//builder.Services.AddHostedService<ReplicationService>();
+builder.Services.AddReplicationServices(builder.Configuration);
 
 // Logging
 var loggerProvider = new MangaMesh.Peer.ClientApi.Services.InMemoryLoggerProvider();

@@ -70,7 +70,7 @@ public class ImportChapterServiceTests
     }
 
     [Fact]
-    public async Task ImportAsync_AlreadyExists_ThrowsInvalidOperationException()
+    public async Task ImportAsync_AlreadyExists_ReturnsAlreadyExistsTrue()
     {
         var request = BuildRequest();
         var entries = new List<ChapterFileEntry>();
@@ -89,7 +89,10 @@ public class ImportChapterServiceTests
                 It.IsAny<string>(), It.IsAny<List<ChapterFileEntry>>(), It.IsAny<long>(), default))
             .ReturnsAsync((hash, true));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.ImportAsync(request));
+        var result = await _sut.ImportAsync(request);
+
+        Assert.True(result.AlreadyExists);
+        Assert.Equal("existinghash", result.ManifestHash.Value);
     }
 
     [Fact]

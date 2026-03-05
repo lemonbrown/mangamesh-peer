@@ -12,6 +12,7 @@ namespace MangaMesh.Peer.Core.Blob
         Task<Stream?> OpenReadAsync(BlobHash hash);
         bool Exists(BlobHash hash);
         long GetSize(BlobHash hash);
+        DateTime GetLastAccessed(BlobHash hash);
         void Delete(BlobHash hash);
         IEnumerable<BlobHash> GetAllHashes();
     }

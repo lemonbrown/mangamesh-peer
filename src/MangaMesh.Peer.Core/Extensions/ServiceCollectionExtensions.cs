@@ -1,4 +1,6 @@
+using MangaMesh.Peer.Core.Blob;
 using MangaMesh.Peer.Core.Node;
+using MangaMesh.Peer.Core.Replication;
 using MangaMesh.Peer.Core.Storage;
 using MangaMesh.Peer.Core.Transport;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,14 +85,43 @@ namespace MangaMesh.Peer.Core.Extensions
 
         public static IServiceCollection AddMangaMeshChapterServices(this IServiceCollection services)
         {
+            services.AddSingleton<ISourceProviderCache, InMemorySourceProviderCache>();
             services.AddSingleton<IImageFormatProvider, DefaultImageFormatProvider>();
             services.AddSingleton<IChapterSourceReader, DirectorySourceReader>();
             services.AddSingleton<IChapterSourceReader, ZipSourceReader>();
             services.AddSingleton<IManifestSigningService, ManifestSigningService>();
-            
+
             services.AddScoped<IChunkIngester, ChunkIngester>();
             services.AddScoped<IChapterIngestionService, ChapterIngestionService>();
             services.AddScoped<IChapterPublisherService, ChapterPublisherService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddReplicationServices(
+            this IServiceCollection services,
+            IConfiguration configuration)
+        {
+            services.Configure<ReplicationOptions>(configuration.GetSection("Replication"));
+            services.Configure<EvictionOptions>(configuration.GetSection("Eviction"));
+
+            // Singletons — shared state across all scopes
+            services.AddSingleton<IConsistentHashRing, ConsistentHashRing>();
+            services.AddSingleton<IReplicationPolicy, TieredReplicationPolicy>();
+            services.AddSingleton<IChapterHealthMonitor, GossipChapterHealthMonitor>();
+            services.AddSingleton<IChapterDiversityTracker, InMemoryChapterDiversityTracker>();
+            services.AddSingleton<IPeerScorer, WeightedPeerScorer>();
+            services.AddSingleton<IPeerStorageProfileProvider, PeerStorageProfileProvider>();
+            services.AddSingleton<IEvictionPolicy, ScoredEvictionPolicy>();
+
+            // Scoped — per-request lifetime for services that use scoped IBlobStore / IManifestStore
+            services.AddScoped<IReplicationDecisionEngine, ReplicationDecisionEngine>();
+            services.AddScoped<IReplicationExecutor, ChunkReplicationExecutor>();
+            services.AddScoped<IRepairScheduler, RepairScheduler>();
+
+            // Background services
+            services.AddHostedService<PeerProfileGossipService>();
+            services.AddHostedService<RepairBackgroundService>();
 
             return services;
         }

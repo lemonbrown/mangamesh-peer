@@ -1,4 +1,5 @@
 using MangaMesh.Peer.Core.Blob;
+using MangaMesh.Peer.Core.Node;
 using MangaMesh.Shared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,46 +12,65 @@ namespace MangaMesh.Peer.ClientApi.Controllers
     [Route("api/[controller]")]
     public class BlobController : ControllerBase
     {
-
         private readonly ILogger<BlobController> _logger;
-
         private readonly IBlobStore _blobStore;
+        private readonly IPeerFetcher _peerFetcher;
+        private readonly ISourceProviderCache _providerCache;
 
-        public BlobController(ILogger<BlobController> logger, IBlobStore blobStore)
+        public BlobController(
+            ILogger<BlobController> logger,
+            IBlobStore blobStore,
+            IPeerFetcher peerFetcher,
+            ISourceProviderCache providerCache)
         {
             _logger = logger;
-
             _blobStore = blobStore;
+            _peerFetcher = peerFetcher;
+            _providerCache = providerCache;
         }
 
         [HttpGet("{hash}", Name = "GetBlobByHash")]
         public async Task<IResult> GetByHashAsync(string hash)
         {
             var blobHash = new BlobHash(hash);
-            if (!_blobStore.Exists(blobHash))
-                return Results.NotFound();
 
-            var stream = await _blobStore.OpenReadAsync(blobHash);
-            return Results.Stream(stream, "application/octet-stream");
+            if (_blobStore.Exists(blobHash))
+            {
+                var stream = await _blobStore.OpenReadAsync(blobHash);
+                return Results.Stream(stream, "application/octet-stream");
+            }
+
+            // Proxy-fetch from the source peer if known — do not store locally
+            var source = _providerCache.GetSource(hash);
+            if (source != null)
+            {
+                var data = await _peerFetcher.FetchBlobForProxyAsync(source, hash);
+                if (data != null)
+                    return Results.Bytes(data, "application/octet-stream");
+            }
+
+            return Results.NotFound();
         }
 
         /// <summary>
-        /// Reassembles a file from a PageManifest hash stored locally.
-        /// Reads the PageManifest blob, fetches all chunks from local blob store, and returns the assembled file.
-        /// Used by clients in PeerRedirect gateway mode to fetch content directly from a peer.
+        /// Reassembles a file from a PageManifest. Reads page manifest and image chunks from
+        /// permanent local storage or fetches them on demand from the source peer.
+        /// Nothing is stored locally — content is fetched, assembled, streamed, and discarded.
         /// </summary>
         [HttpGet("~/api/file/{pageHash}", Name = "GetFileByPageHash")]
         public async Task<IActionResult> GetFileByPageHashAsync(string pageHash)
         {
             var manifestHash = new BlobHash(pageHash);
-            if (!_blobStore.Exists(manifestHash))
+
+            // ── 1. Get page manifest bytes (local store or proxy) ──────────────
+            byte[]? pageManifestBytes = await ReadBytesAsync(manifestHash);
+            if (pageManifestBytes == null)
                 return NotFound();
 
             PageManifest? manifest;
             try
             {
-                await using var manifestStream = await _blobStore.OpenReadAsync(manifestHash);
-                manifest = await JsonSerializer.DeserializeAsync<PageManifest>(manifestStream);
+                manifest = JsonSerializer.Deserialize<PageManifest>(pageManifestBytes);
                 if (manifest == null) return NotFound();
             }
             catch (Exception ex)
@@ -62,21 +82,25 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             if (manifest.FileSize > 100 * 1024 * 1024)
                 return BadRequest("File too large for in-memory reassembly.");
 
+            // ── 2. Assemble image from chunks (local store or proxy) ───────────
             var fileData = new byte[manifest.FileSize];
             int offset = 0;
 
+            // The page manifest source is also the source for all its chunks.
+            var chunkSource = _providerCache.GetSource(pageHash);
+
+            // Register chunk hashes against the same source so raw blob requests work too.
+            if (chunkSource != null)
+                _providerCache.RegisterSources(manifest.Chunks, chunkSource);
+
             foreach (var chunkHash in manifest.Chunks)
             {
-                var chunk = new BlobHash(chunkHash);
-                if (!_blobStore.Exists(chunk))
+                var chunkBytes = await ReadBytesAsync(new BlobHash(chunkHash), chunkSource);
+                if (chunkBytes == null)
                 {
                     _logger.LogWarning("Missing chunk {ChunkHash} for page {PageHash}", chunkHash, pageHash);
                     return NotFound($"Missing chunk {chunkHash}.");
                 }
-
-                await using var chunkStream = await _blobStore.OpenReadAsync(chunk);
-                var chunkBytes = new byte[chunkStream.Length];
-                await chunkStream.ReadExactlyAsync(chunkBytes);
 
                 if (offset + chunkBytes.Length > fileData.Length)
                     return BadRequest("Chunk data exceeds declared file size.");
@@ -86,6 +110,30 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             }
 
             return File(fileData, manifest.MimeType);
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns blob bytes from permanent local storage, falling back to proxy fetch.
+        /// Nothing is stored — proxy data is returned in memory and then discarded.
+        /// </summary>
+        private async Task<byte[]?> ReadBytesAsync(BlobHash hash,
+            MangaMesh.Peer.Core.Transport.NodeAddress? knownSource = null)
+        {
+            if (_blobStore.Exists(hash))
+            {
+                await using var stream = await _blobStore.OpenReadAsync(hash);
+                if (stream == null) return null;
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                return ms.ToArray();
+            }
+
+            var source = knownSource ?? _providerCache.GetSource(hash.Value);
+            if (source == null) return null;
+
+            return await _peerFetcher.FetchBlobForProxyAsync(source, hash.Value);
         }
     }
 }
