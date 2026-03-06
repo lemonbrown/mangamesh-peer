@@ -1,20 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { getNodeStatus } from '../api/node';
+import { useNode } from '../NodeContext';
 import type { NodeStatus } from '../types/api';
 import { APP_VERSION } from '../version';
 
 const NodeStatusIndicator: React.FC = () => {
+    const { testNodeUrl } = useNode();
     const [status, setStatus] = useState<NodeStatus | null>(null);
     const [showDetails, setShowDetails] = useState(false);
 
     useEffect(() => {
+        if (!testNodeUrl) return; // no node selected yet, don't fetch
+
         const fetchStatus = async () => {
             try {
                 const data = await getNodeStatus();
                 setStatus(data);
             } catch (error) {
                 console.error('Failed to fetch node status', error);
-                // Reset status on error if desired, or keep last known
             }
         };
 
@@ -22,7 +25,7 @@ const NodeStatusIndicator: React.FC = () => {
         fetchStatus();
 
         return () => clearInterval(interval);
-    }, []);
+    }, [testNodeUrl]); // re-run when selected node changes
 
     if (!status) return null;
 

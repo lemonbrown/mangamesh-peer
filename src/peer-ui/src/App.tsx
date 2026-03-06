@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { NodeProvider } from './NodeContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Subscriptions from './pages/Subscriptions';
@@ -16,25 +17,27 @@ import Settings from './pages/Settings';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="subscriptions" element={<Subscriptions />} />
-          <Route path="series" element={<Series />} />
-          <Route path="series/:seriesId" element={<SeriesDetails />} />
-          <Route path="series/:seriesId/read/:chapterId" element={<Reader />} />
-          <Route path="import" element={<ImportChapter />} />
-          <Route path="storage" element={<Storage />} />
-          <Route path="keys" element={<Keys />} />
-          <Route path="logs" element={<Logs />} />
-          <Route path="peer" element={<Peer />} />
-          <Route path="broadcasts" element={<Broadcasts />} />
-          <Route path="broadcasts/:seriesId" element={<BroadcastSeriesDetail />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <NodeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="subscriptions" element={<Subscriptions />} />
+            <Route path="series" element={<Series />} />
+            <Route path="series/:seriesId" element={<SeriesDetails />} />
+            <Route path="series/:seriesId/read/:chapterId" element={<Reader />} />
+            <Route path="import" element={<ImportChapter />} />
+            <Route path="storage" element={<Storage />} />
+            <Route path="keys" element={<Keys />} />
+            <Route path="logs" element={<Logs />} />
+            <Route path="peer" element={<Peer />} />
+            <Route path="broadcasts" element={<Broadcasts />} />
+            <Route path="broadcasts/:seriesId" element={<BroadcastSeriesDetail />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </NodeProvider>
   );
 }
 

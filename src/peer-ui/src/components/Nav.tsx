@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import classNames from 'classnames';
 import NodeStatusIndicator from './NodeStatusIndicator';
+import NodeSelector from './NodeSelector';
 
 const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => {
     const location = useLocation();
@@ -100,6 +101,7 @@ export default function Nav() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <NodeSelector />
                     <NodeStatusIndicator />
 
                     {/* Gear / Settings button */}
