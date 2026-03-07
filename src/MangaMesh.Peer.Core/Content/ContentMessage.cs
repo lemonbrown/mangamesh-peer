@@ -79,6 +79,9 @@ namespace MangaMesh.Peer.Core.Content
 
         /// <summary>0 = normal, 1 = rare (below min replicas), 2 = urgent repair.</summary>
         public int Priority { get; set; }
+
+        /// <summary>Total chunks in this chapter (across all pages). 0 = unknown, disables diversity check.</summary>
+        public int TotalChunksInChapter { get; set; }
     }
 
     /// <summary>Receiver's response to a ReplicateChunk push request.</summary>
@@ -93,6 +96,8 @@ namespace MangaMesh.Peer.Core.Content
     /// <summary>Gossip: share chapter health observations with a neighbour.</summary>
     public class ChapterHealthGossip : ContentMessage
     {
+        public string SenderPeerId { get; set; } = string.Empty;
+        public Dictionary<string, byte[]> ChunkBloomFilters { get; set; } = new();
         public List<ChapterHealthState> Items { get; set; } = new();
     }
 

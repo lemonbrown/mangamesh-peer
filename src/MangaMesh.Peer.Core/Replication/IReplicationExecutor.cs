@@ -19,6 +19,7 @@ public interface IReplicationExecutor
         string chapterId,
         RoutingEntry target,
         int priority = 0,
+        int totalChunksInChapter = 0,
         CancellationToken ct = default);
 
     /// <summary>
@@ -29,5 +30,6 @@ public interface IReplicationExecutor
         string blobHash,
         string chapterId,
         int targetReplicas,
+        int totalChunksInChapter = 0,
         CancellationToken ct = default);
 }

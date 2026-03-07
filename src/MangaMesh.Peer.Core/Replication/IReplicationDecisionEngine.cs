@@ -6,7 +6,7 @@ public interface IReplicationDecisionEngine
     /// Determines whether the local node should accept and store this chunk.
     /// Checks ring responsibility, available storage, and diversity constraint.
     /// </summary>
-    Task<bool> ShouldAcceptChunkAsync(string blobHash, string chapterId, CancellationToken ct = default);
+    Task<bool> ShouldAcceptChunkAsync(string blobHash, string chapterId, int totalChunksInChapter = 0, CancellationToken ct = default);
 
     /// <summary>
     /// Determines whether the local node should actively push this chunk to new peers.

@@ -76,22 +76,37 @@ public sealed class RepairScheduler : IRepairScheduler
 
         ChunkReplicaTarget target = _policy.GetTarget(manifest);
 
+        // First pass: collect all chunk hashes across all pages to know the chapter total.
+        // This is required so the diversity constraint on receiving nodes uses the correct
+        // denominator (total chapter chunks, not per-page chunks).
+        var pageChunks = new List<(string PageHash, IReadOnlyList<string> Chunks)>();
         foreach (ChapterFileEntry file in manifest.Files)
         {
             ct.ThrowIfCancellationRequested();
-
-            // Resolve page manifest to get chunk hashes
             if (!_blobStore.Exists(new BlobHash(file.Hash)))
                 continue;
-
-            PageManifest? pageManifest = await ReadPageManifestAsync(file.Hash);
-            if (pageManifest is null)
+            PageManifest? pm = await ReadPageManifestAsync(file.Hash);
+            if (pm is null)
                 continue;
+            pageChunks.Add((file.Hash, pm.Chunks));
+        }
 
-            foreach (string chunkHash in pageManifest.Chunks)
+        int totalChunksInChapter = pageChunks.Sum(p => p.Chunks.Count);
+
+        // Second pass: push page manifests and under-replicated image chunks.
+        // Page manifests are pushed so receiving nodes can decode chunk membership in GetOverview.
+        foreach (var (pageHash, chunks) in pageChunks)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            int pmReplicas = _healthMonitor.EstimateReplicaCount(pageHash, manifest.ChapterId);
+            if (pmReplicas < target.TargetReplicas)
+                await _executor.PushToRingPeersAsync(pageHash, manifest.ChapterId, target.TargetReplicas, totalChunksInChapter, ct);
+
+            foreach (string chunkHash in chunks)
             {
                 ct.ThrowIfCancellationRequested();
-                int replicas = _healthMonitor.EstimateReplicaCount(chunkHash);
+                int replicas = _healthMonitor.EstimateReplicaCount(chunkHash, manifest.ChapterId);
 
                 if (replicas >= target.TargetReplicas)
                     continue;
@@ -102,7 +117,7 @@ public sealed class RepairScheduler : IRepairScheduler
                     "Chunk {Hash} has {Replicas}/{Target} replicas — repairing (priority={P})",
                     chunkHash[..8], replicas, target.TargetReplicas, priority);
 
-                await _executor.PushToRingPeersAsync(chunkHash, manifest.ChapterId, target.TargetReplicas, ct);
+                await _executor.PushToRingPeersAsync(chunkHash, manifest.ChapterId, target.TargetReplicas, totalChunksInChapter, ct);
             }
         }
     }

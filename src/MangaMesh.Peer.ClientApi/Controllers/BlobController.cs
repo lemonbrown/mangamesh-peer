@@ -40,11 +40,11 @@ namespace MangaMesh.Peer.ClientApi.Controllers
                 return Results.Stream(stream, "application/octet-stream");
             }
 
-            // Proxy-fetch from the source peer if known — do not store locally
             var source = _providerCache.GetSource(hash);
             if (source != null)
             {
-                var data = await _peerFetcher.FetchBlobForProxyAsync(source, hash);
+                var blobHash2 = new BlobHash(hash);
+                var data = await ReadBytesAsync(blobHash2, source);
                 if (data != null)
                     return Results.Bytes(data, "application/octet-stream");
             }
@@ -54,8 +54,8 @@ namespace MangaMesh.Peer.ClientApi.Controllers
 
         /// <summary>
         /// Reassembles a file from a PageManifest. Reads page manifest and image chunks from
-        /// permanent local storage or fetches them on demand from the source peer.
-        /// Nothing is stored locally — content is fetched, assembled, streamed, and discarded.
+        /// local storage or fetches them on demand from the source peer.
+        /// Fetched blobs are cached locally (fire-and-forget) so this peer becomes a replica.
         /// </summary>
         [HttpGet("~/api/file/{pageHash}", Name = "GetFileByPageHash")]
         public async Task<IActionResult> GetFileByPageHashAsync(string pageHash)
@@ -115,8 +115,9 @@ namespace MangaMesh.Peer.ClientApi.Controllers
         // ── Helpers ───────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Returns blob bytes from permanent local storage, falling back to proxy fetch.
-        /// Nothing is stored — proxy data is returned in memory and then discarded.
+        /// Returns blob bytes from local storage, falling back to proxy fetch.
+        /// Proxy-fetched data is cached locally (fire-and-forget) so the reader
+        /// accumulates replicas of what they read.
         /// </summary>
         private async Task<byte[]?> ReadBytesAsync(BlobHash hash,
             MangaMesh.Peer.Core.Transport.NodeAddress? knownSource = null)
@@ -133,7 +134,20 @@ namespace MangaMesh.Peer.ClientApi.Controllers
             var source = knownSource ?? _providerCache.GetSource(hash.Value);
             if (source == null) return null;
 
-            return await _peerFetcher.FetchBlobForProxyAsync(source, hash.Value);
+            var data = await _peerFetcher.FetchBlobForProxyAsync(source, hash.Value);
+
+            if (data != null)
+            {
+                // Cache locally so this peer becomes a replica for what it reads.
+                // Fire-and-forget — don't block the serving response on storage I/O.
+                _ = Task.Run(async () =>
+                {
+                    try { await _blobStore.PutAsync(new MemoryStream(data)); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "Cache-on-read store failed for {Hash}", hash.Value[..8]); }
+                });
+            }
+
+            return data;
         }
     }
 }

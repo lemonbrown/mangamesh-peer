@@ -1,6 +1,8 @@
 using MangaMesh.Peer.Core.Configuration;
 using MangaMesh.Peer.Core.Content;
 using MangaMesh.Peer.Core.Replication;
+using MangaMesh.Shared.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,6 +20,8 @@ public sealed class PeerProfileGossipService : BackgroundService
     private readonly IDhtNode _dhtNode;
     private readonly IPeerStorageProfileProvider _profileProvider;
     private readonly IChapterHealthMonitor _healthMonitor;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly MangaMesh.Peer.Core.Node.INodeIdentity _identity;
     private readonly ReplicationOptions _opts;
     private readonly ILogger<PeerProfileGossipService> _logger;
 
@@ -25,12 +29,16 @@ public sealed class PeerProfileGossipService : BackgroundService
         IDhtNode dhtNode,
         IPeerStorageProfileProvider profileProvider,
         IChapterHealthMonitor healthMonitor,
+        IServiceScopeFactory scopeFactory,
+        MangaMesh.Peer.Core.Node.INodeIdentity identity,
         IOptions<ReplicationOptions> options,
         ILogger<PeerProfileGossipService> logger)
     {
         _dhtNode = dhtNode;
         _profileProvider = profileProvider;
         _healthMonitor = healthMonitor;
+        _scopeFactory = scopeFactory;
+        _identity = identity;
         _opts = options.Value;
         _logger = logger;
     }
@@ -77,16 +85,81 @@ public sealed class PeerProfileGossipService : BackgroundService
         if (neighbours.Count == 0)
             return;
 
+        var topItems = healthStates
+            .OrderByDescending(s => s.RareChunkCount)
+            .Take(20)
+            .ToList();
+
+        var filters = new Dictionary<string, byte[]>();
+
+        using var scope = _scopeFactory.CreateScope();
+        var blobStore = scope.ServiceProvider.GetRequiredService<MangaMesh.Peer.Core.Blob.IBlobStore>();
+        var manifestStore = scope.ServiceProvider.GetRequiredService<MangaMesh.Peer.Core.Manifests.IManifestStore>();
+
+        var localBlobs = new HashSet<string>(
+            blobStore.GetAllHashes().Select(h => h.Value),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var state in topItems)
+        {
+            var manifest = await manifestStore.GetAsync(new ManifestHash(state.ManifestHash));
+            if (manifest == null) continue;
+
+            var files = (IReadOnlyList<MangaMesh.Shared.Models.ChapterFileEntry>)(manifest.Files
+                ?? (IReadOnlyList<MangaMesh.Shared.Models.ChapterFileEntry>)Array.Empty<MangaMesh.Shared.Models.ChapterFileEntry>());
+
+            int totalChunks = state.TotalChunkCount > 0 ? state.TotalChunkCount : files.Count;
+            if (totalChunks == 0) continue;
+
+            var filter = new MangaMesh.Peer.Core.Replication.BloomFilter(totalChunks, 0.05);
+            bool addedAny = false;
+
+            foreach (var f in files)
+            {
+                // we scan the local page manifestations to identify chunk ownership
+                using var stream = await blobStore.OpenReadAsync(new MangaMesh.Peer.Core.Blob.BlobHash(f.Hash));
+                if (stream != null)
+                {
+                    try
+                    {
+                        var pm = await System.Text.Json.JsonSerializer.DeserializeAsync<MangaMesh.Shared.Models.PageManifest>(stream,
+                            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (pm?.Chunks != null)
+                        {
+                            foreach (var chunkHash in pm.Chunks)
+                            {
+                                if (localBlobs.Contains(chunkHash))
+                                {
+                                    filter.Add(chunkHash);
+                                    addedAny = true;
+                                }
+                            }
+                        }
+                    }
+                    catch { /* corrupt PM */ }
+                }
+                else if (localBlobs.Contains(f.Hash))
+                {
+                    filter.Add(f.Hash);
+                    addedAny = true;
+                }
+            }
+
+            if (addedAny)
+            {
+                filters[state.ChapterId] = filter.ToByteArray();
+            }
+        }
+
         var gossipMsg = new ChapterHealthGossip
         {
-            Items = healthStates
-                .OrderByDescending(s => s.RareChunkCount)
-                .Take(20)
-                .ToList()
+            SenderPeerId = Convert.ToHexString(_identity.NodeId).ToLowerInvariant(),
+            Items = topItems,
+            ChunkBloomFilters = filters
         };
 
-        _logger.LogDebug("Gossiping {Count} chapter health states to {Peers} peers",
-            gossipMsg.Items.Count, neighbours.Count);
+        _logger.LogDebug("Gossiping {Count} chapter health states and {FiltersCount} filters to {Peers} peers",
+            gossipMsg.Items.Count, filters.Count, neighbours.Count);
 
         foreach (var neighbour in neighbours)
         {

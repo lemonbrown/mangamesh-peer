@@ -56,7 +56,7 @@ public class ReplicationDecisionEngineTests
 
         // Health monitor
         var health = new Mock<IChapterHealthMonitor>();
-        health.Setup(h => h.EstimateReplicaCount(It.IsAny<string>())).Returns(currentReplicas);
+        health.Setup(h => h.EstimateReplicaCount(It.IsAny<string>(), It.IsAny<string?>())).Returns(currentReplicas);
 
         // Diversity tracker
         var diversity = new Mock<IChapterDiversityTracker>();
@@ -96,10 +96,10 @@ public class ReplicationDecisionEngineTests
     }
 
     [Fact]
-    public async Task ShouldAcceptChunk_ResponsibleButDiversityDenied_ReturnsFalse()
+    public async Task ShouldAcceptChunk_ResponsibleButDiversityDenied_IgnoresDiversityAndReturnsTrue()
     {
         var engine = BuildEngine(blobExists: false, isRingResponsible: true, canAcceptDiversity: false);
-        Assert.False(await engine.ShouldAcceptChunkAsync("hash1", "ch-1"));
+        Assert.True(await engine.ShouldAcceptChunkAsync("hash1", "ch-1"));
     }
 
     [Fact]

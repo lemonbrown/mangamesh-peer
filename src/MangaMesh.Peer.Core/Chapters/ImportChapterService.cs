@@ -28,7 +28,18 @@ namespace MangaMesh.Peer.Core.Chapters
         {
             var (entries, totalSize) = await _ingestionService.IngestDirectoryAsync(request.SourceDirectory, ct);
 
-            var (seriesId, seriesTitle) = await _seriesRegistry.RegisterSeriesAsync(request.Source, request.ExternalMangaId);
+            string seriesId;
+            string seriesTitle;
+            try
+            {
+                (seriesId, seriesTitle) = await _seriesRegistry.RegisterSeriesAsync(request.Source, request.ExternalMangaId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Tracker series registration failed; storing chapter locally with fallback series ID");
+                seriesId = string.IsNullOrEmpty(request.ExternalMangaId) ? Guid.NewGuid().ToString("N") : request.ExternalMangaId;
+                seriesTitle = "";
+            }
 
             var (hash, alreadyExists) = await _publisherService.PublishChapterAsync(
                 request, seriesId, seriesTitle, entries, totalSize, ct);

@@ -32,14 +32,14 @@ namespace MangaMesh.Peer.Core.Content
 
             return msg switch
             {
-                GetManifest m         => HandleManifestAsync(from, m),
-                GetBlob b             => HandleBlobAsync(from, b),
-                ManifestData d        => HandleManifestDataAsync(from, d),
-                BlobData bd           => HandleBlobDataAsync(from, bd),
-                ReplicateChunk rc     => HandleReplicateChunkAsync(from, rc),
+                GetManifest m => HandleManifestAsync(from, m),
+                GetBlob b => HandleBlobAsync(from, b),
+                ManifestData d => HandleManifestDataAsync(from, d),
+                BlobData bd => HandleBlobDataAsync(from, bd),
+                ReplicateChunk rc => HandleReplicateChunkAsync(from, rc),
                 ChapterHealthGossip g => HandleChapterHealthGossipAsync(from, g),
-                ChunkReplicaQuery q   => HandleChunkReplicaQueryAsync(from, q),
-                _                     => Task.CompletedTask
+                ChunkReplicaQuery q => HandleChunkReplicaQueryAsync(from, q),
+                _ => Task.CompletedTask
             };
         }
 
@@ -122,7 +122,7 @@ namespace MangaMesh.Peer.Core.Content
             }
             else
             {
-                bool shouldAccept = await decisionEngine.ShouldAcceptChunkAsync(rc.BlobHash, rc.ChapterId);
+                bool shouldAccept = await decisionEngine.ShouldAcceptChunkAsync(rc.BlobHash, rc.ChapterId, rc.TotalChunksInChapter);
 
                 if (shouldAccept)
                 {
@@ -160,7 +160,7 @@ namespace MangaMesh.Peer.Core.Content
         {
             using var scope = _scopeFactory.CreateScope();
             var healthMonitor = scope.ServiceProvider.GetService<IChapterHealthMonitor>();
-            healthMonitor?.MergeGossip(g.Items);
+            healthMonitor?.MergeGossip(g.SenderPeerId, g.ChunkBloomFilters, g.Items);
             DhtNode?.HandleContentMessage(g);
             return Task.CompletedTask;
         }

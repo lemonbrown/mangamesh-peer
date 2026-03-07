@@ -9,12 +9,12 @@ public sealed class ReplicationOptions
     public bool IsFullSeeder { get; set; } = false;
     public BandwidthClass BandwidthClass { get; set; } = BandwidthClass.Medium;
 
-    // Replica targets by chapter age tier
-    public int NewReleaseTargetReplicas { get; set; } = 25;
-    public int ActiveTargetReplicas { get; set; } = 12;
-    public int OlderTargetReplicas { get; set; } = 5;
-    public int ArchivalMinimumReplicas { get; set; } = 3;
-    public int AbsoluteMinimumReplicas { get; set; } = 3;
+    // Dynamic replication formula: K = clamp(swarmSize / RedundancyFactor, 1, MaxTargetReplicas)
+    // New releases get K * NewReleaseBoost (still capped at MaxTargetReplicas).
+    // The seeder is always the guaranteed full copy; MinimumReplicas is always 1.
+    public int RedundancyFactor { get; set; } = 4;
+    public int MaxTargetReplicas { get; set; } = 8;
+    public double NewReleaseBoost { get; set; } = 1.5;
 
     // Age thresholds (days)
     public int NewReleaseAgeDays { get; set; } = 7;

@@ -16,6 +16,7 @@ namespace MangaMesh.Peer.Core.Chapters
         private readonly IReplicationDecisionEngine? _replicationDecision;
         private readonly IChapterHealthMonitor? _healthMonitor;
         private readonly ILogger<ChapterIngestionService>? _logger;
+        private readonly IReplicationPolicy? _replicationPolicy;
 
         public ChapterIngestionService(
             IEnumerable<IChapterSourceReader> sourceReaders,
@@ -25,7 +26,8 @@ namespace MangaMesh.Peer.Core.Chapters
             IReplicationExecutor? replicationExecutor = null,
             IReplicationDecisionEngine? replicationDecision = null,
             IChapterHealthMonitor? healthMonitor = null,
-            ILogger<ChapterIngestionService>? logger = null)
+            ILogger<ChapterIngestionService>? logger = null,
+            IReplicationPolicy? replicationPolicy = null)
         {
             _sourceReaders = sourceReaders;
             _imageFormats = imageFormats;
@@ -35,6 +37,7 @@ namespace MangaMesh.Peer.Core.Chapters
             _replicationDecision = replicationDecision;
             _healthMonitor = healthMonitor;
             _logger = logger;
+            _replicationPolicy = replicationPolicy;
         }
 
         public async Task<(List<ChapterFileEntry> Entries, long TotalSize)> IngestDirectoryAsync(
@@ -48,7 +51,8 @@ namespace MangaMesh.Peer.Core.Chapters
             long totalSize = 0;
 
             // Collect all chunk hashes during ingestion for post-import seeding
-            var allChunks = new List<(string ChunkHash, string PageHash)>();
+            // (ChunkHash, PageHash, TotalChunksInPage)
+            var allChunks = new List<(string ChunkHash, string PageHash, int TotalChunks)>();
 
             await foreach (var (name, content) in reader.ReadFilesAsync(sourceDirectory, ct))
             {
@@ -70,10 +74,11 @@ namespace MangaMesh.Peer.Core.Chapters
                     if (_dhtNode != null)
                     {
                         await _dhtNode.StoreAsync(Convert.FromHexString(pageHash));
+                        int pageChunkCount = pageManifest.Chunks.Count;
                         foreach (var chunkHash in pageManifest.Chunks)
                         {
                             await _dhtNode.StoreAsync(Convert.FromHexString(chunkHash));
-                            allChunks.Add((chunkHash, pageHash));
+                            allChunks.Add((chunkHash, pageHash, pageChunkCount));
                         }
                     }
 
@@ -88,23 +93,31 @@ namespace MangaMesh.Peer.Core.Chapters
                 }
             }
 
-            // Fire-and-forget: push chunks to ring peers in background
-            // Uses pageHash as the chapter key since chapterId is not known here
-            if (_replicationExecutor != null && _replicationDecision != null && allChunks.Count > 0)
+            // Fire-and-forget: push chunks to ring peers in background.
+            // Skip the ring-leader check (ShouldReplicateChunkAsync) — the seeder is the sole
+            // source and must push all chunks immediately regardless of ring position.
+            // Also push page manifests so receiving nodes can decode chunk membership in GetOverview.
+            if (_replicationExecutor != null && allChunks.Count > 0)
             {
+                int targetReplicas = _replicationPolicy?.GetBaseTargetReplicas() ?? 3;
+                string chapterKey = allChunks.Select(c => c.PageHash).Distinct().OrderBy(h => h).First();
+                int totalChunksInChapter = allChunks.Count;
+                var pageHashes = allChunks.Select(c => c.PageHash).Distinct().ToList();
+
                 _ = Task.Run(async () =>
                 {
-                    foreach (var (chunkHash, pageHash) in allChunks)
+                    // Push page manifests first so receivers can decode image chunk membership
+                    foreach (var pageHash in pageHashes)
                     {
-                        try
-                        {
-                            if (await _replicationDecision.ShouldReplicateChunkAsync(chunkHash, pageHash, ct))
-                                await _replicationExecutor.PushToRingPeersAsync(chunkHash, pageHash, targetReplicas: 12, ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger?.LogDebug(ex, "Post-import replication push failed for chunk {Hash}", chunkHash[..8]);
-                        }
+                        try { await _replicationExecutor.PushToRingPeersAsync(pageHash, chapterKey, targetReplicas, totalChunksInChapter, ct); }
+                        catch (Exception ex) { _logger?.LogDebug(ex, "Post-import page manifest push failed for {Hash}", pageHash[..8]); }
+                    }
+
+                    // Push all image chunks
+                    foreach (var (chunkHash, _, _) in allChunks)
+                    {
+                        try { await _replicationExecutor.PushToRingPeersAsync(chunkHash, chapterKey, targetReplicas, totalChunksInChapter, ct); }
+                        catch (Exception ex) { _logger?.LogDebug(ex, "Post-import replication push failed for chunk {Hash}", chunkHash[..8]); }
                     }
                 }, ct);
             }

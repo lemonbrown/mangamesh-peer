@@ -14,6 +14,7 @@ import Peer from './pages/Peer';
 import Broadcasts from './pages/Broadcasts';
 import BroadcastSeriesDetail from './pages/BroadcastSeriesDetail';
 import Settings from './pages/Settings';
+import Replication from './pages/Replication';
 
 function App() {
   return (
@@ -21,7 +22,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
+            <Route index element={<Peer />} />
             <Route path="subscriptions" element={<Subscriptions />} />
             <Route path="series" element={<Series />} />
             <Route path="series/:seriesId" element={<SeriesDetails />} />
@@ -33,6 +34,7 @@ function App() {
             <Route path="peer" element={<Peer />} />
             <Route path="broadcasts" element={<Broadcasts />} />
             <Route path="broadcasts/:seriesId" element={<BroadcastSeriesDetail />} />
+            <Route path="replication" element={<Replication />} />
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>

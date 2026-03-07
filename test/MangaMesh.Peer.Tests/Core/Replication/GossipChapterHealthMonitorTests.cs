@@ -75,7 +75,7 @@ public class GossipChapterHealthMonitorTests
     public void MergeGossip_AddsNewState()
     {
         var state = new ChapterHealthState("ch-1", "hash-1", 5, 10, 0, DateTime.UtcNow);
-        _monitor.MergeGossip([state]);
+        _monitor.MergeGossip("test-peer", new(), [state]);
 
         var all = _monitor.GetAllHealthStates();
         Assert.Single(all);
@@ -87,8 +87,8 @@ public class GossipChapterHealthMonitorTests
     {
         var older = new ChapterHealthState("ch-2", "hash-2", 2, 10, 0, DateTime.UtcNow.AddMinutes(-10));
         var newer = new ChapterHealthState("ch-2", "hash-2", 8, 10, 0, DateTime.UtcNow);
-        _monitor.MergeGossip([older]);
-        _monitor.MergeGossip([newer]);
+        _monitor.MergeGossip("peer1", new(), [older]);
+        _monitor.MergeGossip("peer2", new(), [newer]);
 
         var all = _monitor.GetAllHealthStates();
         Assert.Single(all);
@@ -100,8 +100,8 @@ public class GossipChapterHealthMonitorTests
     {
         var newer = new ChapterHealthState("ch-3", "hash-3", 8, 10, 0, DateTime.UtcNow);
         var older = new ChapterHealthState("ch-3", "hash-3", 2, 10, 0, DateTime.UtcNow.AddMinutes(-10));
-        _monitor.MergeGossip([newer]);
-        _monitor.MergeGossip([older]);
+        _monitor.MergeGossip("p1", new(), [newer]);
+        _monitor.MergeGossip("p2", new(), [older]);
 
         var all = _monitor.GetAllHealthStates();
         Assert.Equal(8, all[0].ReplicaEstimate); // still newest
@@ -110,7 +110,7 @@ public class GossipChapterHealthMonitorTests
     [Fact]
     public void MergeGossip_MultipleChapters_AllStored()
     {
-        _monitor.MergeGossip([
+        _monitor.MergeGossip("p3", new(), [
             new ChapterHealthState("ch-A", "h1", 3, 10, 0, DateTime.UtcNow),
             new ChapterHealthState("ch-B", "h2", 5, 10, 0, DateTime.UtcNow)
         ]);

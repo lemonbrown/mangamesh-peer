@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:harness": "vite --mode testharness",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

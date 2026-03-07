@@ -6,7 +6,7 @@ public interface IChapterHealthMonitor
     void RecordChunkOwner(string blobHash, string peerId);
 
     /// <summary>Merges gossipped chapter health observations into local state.</summary>
-    void MergeGossip(IEnumerable<ChapterHealthState> states);
+    void MergeGossip(string senderPeerId, Dictionary<string, byte[]> chunkBloomFilters, IEnumerable<ChapterHealthState> states);
 
     /// <summary>
     /// Builds a health snapshot for one chapter from locally known chunk owner data.
@@ -17,8 +17,8 @@ public interface IChapterHealthMonitor
         IEnumerable<string> chunkHashes,
         int minimumReplicas);
 
-    /// <summary>Estimates the number of peers that hold this chunk (HyperLogLog approximation).</summary>
-    int EstimateReplicaCount(string blobHash);
+    /// <summary>Estimates the number of peers that hold this chunk (HyperLogLog approximation + Bloom filter remote discovery).</summary>
+    int EstimateReplicaCount(string blobHash, string? chapterId = null);
 
     /// <summary>
     /// Returns true if the given peer *may* own this chunk (Bloom filter — no false negatives,
@@ -28,4 +28,7 @@ public interface IChapterHealthMonitor
 
     /// <summary>Returns all chapter health states known to this monitor.</summary>
     IReadOnlyList<ChapterHealthState> GetAllHealthStates();
+
+    /// <summary>Generates a Bloom filter of all chunks locally owned for the given chapter.</summary>
+    byte[] GetLocalChunkBloomFilter(string chapterId);
 }

@@ -99,6 +99,7 @@ public sealed class ChunkReplicationExecutor : IReplicationExecutor
         string chapterId,
         RoutingEntry target,
         int priority = 0,
+        int totalChunksInChapter = 0,
         CancellationToken ct = default)
     {
         if (target.NodeId.SequenceEqual(_identity.NodeId))
@@ -108,7 +109,7 @@ public sealed class ChunkReplicationExecutor : IReplicationExecutor
         {
             var response = await _dhtNode.SendContentRequestAsync(
                 target.Address,
-                new ReplicateChunk { BlobHash = blobHash, ChapterId = chapterId, Priority = priority },
+                new ReplicateChunk { BlobHash = blobHash, ChapterId = chapterId, Priority = priority, TotalChunksInChapter = totalChunksInChapter },
                 RequestTimeout);
 
             if (response is ReplicateChunkAck ack)
@@ -135,9 +136,10 @@ public sealed class ChunkReplicationExecutor : IReplicationExecutor
         string blobHash,
         string chapterId,
         int targetReplicas,
+        int totalChunksInChapter = 0,
         CancellationToken ct = default)
     {
-        int currentReplicas = _healthMonitor.EstimateReplicaCount(blobHash);
+        int currentReplicas = _healthMonitor.EstimateReplicaCount(blobHash, chapterId);
         int needed = targetReplicas - currentReplicas;
 
         if (needed <= 0)
@@ -157,7 +159,7 @@ public sealed class ChunkReplicationExecutor : IReplicationExecutor
         foreach (RoutingEntry target in ranked)
         {
             ct.ThrowIfCancellationRequested();
-            await PushChunkToPeerAsync(blobHash, chapterId, target, ct: ct);
+            await PushChunkToPeerAsync(blobHash, chapterId, target, totalChunksInChapter: totalChunksInChapter, ct: ct);
         }
     }
 

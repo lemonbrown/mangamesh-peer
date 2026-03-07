@@ -6,22 +6,22 @@ namespace MangaMesh.Peer.Core.Replication;
 
 /// <summary>
 /// Ranks blobs for eviction using a weighted score of popularity, rarity, and age.
-/// Blobs with replica count below the absolute minimum are never evicted.
+/// Blobs with only 1 known replica (seeder-only) are never evicted.
 /// </summary>
 public sealed class ScoredEvictionPolicy : IEvictionPolicy
 {
     private readonly IChapterHealthMonitor _healthMonitor;
+    private readonly IReplicationPolicy _replicationPolicy;
     private readonly EvictionOptions _evictOpts;
-    private readonly ReplicationOptions _replOpts;
 
     public ScoredEvictionPolicy(
         IChapterHealthMonitor healthMonitor,
-        IOptions<EvictionOptions> evictOptions,
-        IOptions<ReplicationOptions> replOptions)
+        IReplicationPolicy replicationPolicy,
+        IOptions<EvictionOptions> evictOptions)
     {
         _healthMonitor = healthMonitor;
+        _replicationPolicy = replicationPolicy;
         _evictOpts = evictOptions.Value;
-        _replOpts = replOptions.Value;
     }
 
     public async IAsyncEnumerable<EvictionCandidate> GetEvictionCandidatesAsync(
@@ -40,7 +40,8 @@ public sealed class ScoredEvictionPolicy : IEvictionPolicy
                 long size = getSize(hash);
                 DateTime lastAccess = getLastAccessed(hash);
                 int replicas = _healthMonitor.EstimateReplicaCount(hash.Value);
-                bool isProtected = replicas > 0 && replicas < _replOpts.AbsoluteMinimumReplicas;
+                // Protect blobs that only the seeder is known to hold (replicas == 1)
+                bool isProtected = replicas == 1;
 
                 double ageSeconds = (now - lastAccess).TotalSeconds;
 
@@ -48,9 +49,10 @@ public sealed class ScoredEvictionPolicy : IEvictionPolicy
                 double popularity = Math.Max(0.0, 1.0 - ageSeconds / windowSeconds);
 
                 // Rarity: 1.0 = very rare (low replicas); 0.0 = well replicated
+                int k = _replicationPolicy.GetBaseTargetReplicas();
                 double rarity = replicas <= 0
                     ? 0.5  // unknown — treat as moderately rare
-                    : Math.Max(0.0, 1.0 - (double)replicas / _replOpts.ActiveTargetReplicas);
+                    : Math.Max(0.0, 1.0 - (double)replicas / k);
 
                 // Age weight: more recently accessed = higher score = keep
                 double ageNorm = popularity; // reuse popularity as recency proxy

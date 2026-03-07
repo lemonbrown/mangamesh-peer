@@ -45,7 +45,7 @@ public sealed class RepairBackgroundService : BackgroundService
                 IRepairScheduler scheduler = scope.ServiceProvider.GetRequiredService<IRepairScheduler>();
 
                 _logger.LogDebug("Starting repair scan");
-                await scheduler.ScanAndRepairAsync(stoppingToken);
+                //await scheduler.ScanAndRepairAsync(stoppingToken);
                 _logger.LogDebug("Repair scan complete");
             }
             catch (OperationCanceledException)

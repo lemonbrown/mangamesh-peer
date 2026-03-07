@@ -10,8 +10,6 @@ const NodeStatusIndicator: React.FC = () => {
     const [showDetails, setShowDetails] = useState(false);
 
     useEffect(() => {
-        if (!testNodeUrl) return; // no node selected yet, don't fetch
-
         const fetchStatus = async () => {
             try {
                 const data = await getNodeStatus();
@@ -25,7 +23,7 @@ const NodeStatusIndicator: React.FC = () => {
         fetchStatus();
 
         return () => clearInterval(interval);
-    }, [testNodeUrl]); // re-run when selected node changes
+    }, [testNodeUrl]); // re-run when selected node changes (empty string = same origin)
 
     if (!status) return null;
 

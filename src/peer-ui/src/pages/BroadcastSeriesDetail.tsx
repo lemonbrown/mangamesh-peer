@@ -12,7 +12,6 @@ function chFmt(n: number) {
 import { downloadManifest, getLocalSeriesData } from '../api/storage';
 
 function ManifestLink({ seriesId, release }: { seriesId: string; release: ChapterRelease }) {
-    // Pick first node as the source node for reading if we need to actively fetch chunks
     const nodeId = release.nodeIds[0] ?? '';
     const to = `/series/${seriesId}/read/${release.chapterId}?manifest=${release.manifestHash}${nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : ''}`;
 
@@ -25,7 +24,7 @@ function ManifestLink({ seriesId, release }: { seriesId: string; release: Chapte
             <svg className="w-3 h-3 shrink-0 text-blue-400 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            {release.manifestHash.slice(0, 8)}
+            {release.manifestHash}
         </Link>
     );
 }
@@ -272,7 +271,7 @@ export default function BroadcastSeriesDetail() {
                 </div>
             </div>
 
-            // Chapter list
+            {/* Chapter list */}
             {!entry || entry.chapters.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500">
                     {!entry ? 'Series not found in current DHT broadcasts.' : 'No chapters found.'}
@@ -294,27 +293,31 @@ export default function BroadcastSeriesDetail() {
                             {/* Releases */}
                             <div className="space-y-3 pl-3 border-l-2 border-gray-100">
                                 {ch.releases.map((r) => (
-                                    <div key={r.manifestHash} className="flex flex-wrap items-center gap-2">
-                                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                                            <LangFlag code={r.language} /> {r.language}
-                                        </span>
-                                        {r.quality && r.quality !== 'Unknown' && (
-                                            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
-                                                {r.quality}
+                                    <div key={r.manifestHash} className="flex flex-col gap-1.5">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                <LangFlag code={r.language} /> {r.language}
                                             </span>
-                                        )}
-                                        {r.scanGroup && (
-                                            <span className="text-sm font-medium text-gray-700">{r.scanGroup}</span>
-                                        )}
-                                        {r.createdUtc && (
-                                            <span className="text-[11px] text-gray-400">{formatDate(r.createdUtc)}</span>
-                                        )}
-                                        {r.nodeIds.length > 0 && <PeekButton release={r} />}
-                                        <ManifestLink seriesId={seriesId!} release={r} />
-                                        <DownloadButton release={r} initialDownloaded={localManifests.has(r.manifestHash)} />
-                                        {r.nodeIds.length === 0 && (
-                                            <span className="text-[11px] text-gray-400 italic">(No nodes currently actively seeding)</span>
-                                        )}
+                                            {r.quality && r.quality !== 'Unknown' && (
+                                                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
+                                                    {r.quality}
+                                                </span>
+                                            )}
+                                            {r.scanGroup && (
+                                                <span className="text-sm font-medium text-gray-700">{r.scanGroup}</span>
+                                            )}
+                                            {r.createdUtc && (
+                                                <span className="text-[11px] text-gray-400">{formatDate(r.createdUtc)}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <ManifestLink seriesId={seriesId!} release={r} />
+                                            {r.nodeIds.length > 0 && <PeekButton release={r} />}
+                                            <DownloadButton release={r} initialDownloaded={localManifests.has(r.manifestHash)} />
+                                            {r.nodeIds.length === 0 && (
+                                                <span className="text-[11px] text-gray-400 italic">(No active seeders)</span>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>

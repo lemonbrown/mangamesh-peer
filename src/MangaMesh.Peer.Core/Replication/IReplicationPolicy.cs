@@ -9,4 +9,10 @@ public interface IReplicationPolicy
 
     /// <summary>Returns the replica target for a given chapter age, without a full manifest.</summary>
     ChunkReplicaTarget GetTargetForAge(TimeSpan age);
+
+    /// <summary>
+    /// Returns the current base K derived from live swarm size, without age-tier adjustment.
+    /// Used by the decision engine and eviction policy where no manifest is available.
+    /// </summary>
+    int GetBaseTargetReplicas();
 }

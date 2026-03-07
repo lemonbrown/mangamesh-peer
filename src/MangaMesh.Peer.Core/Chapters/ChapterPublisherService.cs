@@ -4,6 +4,7 @@ using MangaMesh.Peer.Core.Node;
 using MangaMesh.Peer.Core.Tracker;
 using MangaMesh.Shared.Models;
 using MangaMesh.Shared.Services;
+using Microsoft.Extensions.Logging;
 using NSec.Cryptography;
 
 namespace MangaMesh.Peer.Core.Chapters
@@ -16,6 +17,7 @@ namespace MangaMesh.Peer.Core.Chapters
         private readonly IManifestSigningService _manifestSigning;
         private readonly ITrackerPublisher _trackerPublisher;
         private readonly IDhtNode? _dhtNode;
+        private readonly ILogger<ChapterPublisherService>? _logger;
 
         public ChapterPublisherService(
             IKeyStore keyStore,
@@ -23,7 +25,8 @@ namespace MangaMesh.Peer.Core.Chapters
             IManifestStore manifestStore,
             IManifestSigningService manifestSigning,
             ITrackerPublisher trackerPublisher,
-            IDhtNode? dhtNode = null)
+            IDhtNode? dhtNode = null,
+            ILogger<ChapterPublisherService>? logger = null)
         {
             _keyStore = keyStore;
             _nodeIdentity = nodeIdentity;
@@ -31,6 +34,7 @@ namespace MangaMesh.Peer.Core.Chapters
             _manifestSigning = manifestSigning;
             _trackerPublisher = trackerPublisher;
             _dhtNode = dhtNode;
+            _logger = logger;
         }
 
         public async Task<(ManifestHash Hash, bool AlreadyExists)> PublishChapterAsync(
@@ -112,7 +116,14 @@ namespace MangaMesh.Peer.Core.Chapters
                 Files = (List<Shared.Models.ChapterFileEntry>)chapterManifest.Files
             };
 
-            await _trackerPublisher.PublishManifestAsync(announceRequest, ct);
+            try
+            {
+                await _trackerPublisher.PublishManifestAsync(announceRequest, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Tracker manifest publish failed for {Hash}; chapter stored locally only", hash.Value);
+            }
 
             // Re-save with signature
             chapterManifest = chapterManifest with { Signature = signedManifest.Signature };

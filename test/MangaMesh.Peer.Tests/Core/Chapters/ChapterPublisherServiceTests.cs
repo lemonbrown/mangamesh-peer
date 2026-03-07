@@ -53,7 +53,7 @@ public class ChapterPublisherServiceTests
             .Setup(m => m.ExistsAsync(It.IsAny<ManifestHash>()))
             .ReturnsAsync(false);
         _manifestStore
-            .Setup(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>()))
+            .Setup(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
 
         _manifestSigning = new Mock<IManifestSigningService>();
@@ -126,7 +126,7 @@ public class ChapterPublisherServiceTests
         await _sut.PublishChapterAsync(request, "series-1", "Title", new List<ChapterFileEntry>(), 0L);
 
         // Save is called twice: once unsigned, once with signature
-        _manifestStore.Verify(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>()), Times.Exactly(2));
+        _manifestStore.Verify(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>(), It.IsAny<bool>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -172,8 +172,8 @@ public class ChapterPublisherServiceTests
 
         ChapterManifest? savedManifest = null;
         _manifestStore
-            .Setup(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>()))
-            .Callback<ManifestHash, ChapterManifest>((_, m) => savedManifest = m)
+            .Setup(m => m.SaveAsync(It.IsAny<ManifestHash>(), It.IsAny<ChapterManifest>(), It.IsAny<bool>()))
+            .Callback<ManifestHash, ChapterManifest, bool>((_, m, __) => savedManifest = m)
             .Returns(Task.CompletedTask);
 
         await _sut.PublishChapterAsync(request, "series-1", "One Piece", new List<ChapterFileEntry>(), 0L);
